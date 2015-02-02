@@ -15,3 +15,11 @@
    
  - In ./extended, information and plots of all the extended
    sources in srclist_puma-v2_complete.txt are included
+   
+ - srclist_by_beam.py will take a srclist, and return a
+   given number of sources in a megapatch srclist. These 
+   will be brightest sources once convolved with the beam, 
+   as defined by the pointing given by a designated metafits
+   file. The sources are also confined to within 20 deg of 
+   the given pointing centre. To use the plotting option 
+   (-p), wscaxes module is needed.
