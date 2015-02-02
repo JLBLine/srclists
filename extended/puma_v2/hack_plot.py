@@ -2,7 +2,6 @@ import numpy as np
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 
-
 def fit_line(x_data,y_data,errors):
 	'''Fits a line using weighted least squares
 	   returns a data fit statsmodels object and the residuals'''
@@ -49,46 +48,51 @@ fig = plt.figure(figsize=(15,8))
 ax1 = fig.add_subplot(121)
 ax2 = fig.add_subplot(122)
 
-m1 = ['0343-056', 56.56200, 0.00167, -5.44640, 0.00222, 408.00000, 0.72000, 0.06000]
-v1 = ['J034611-052620', 56.54919, 0.00113, -5.43890, 0.00095, 74.00000, 2.85851, 0.17316]
-v2 = ['J034619-052721', 56.58030, 0.00092, -5.45594, 0.00130, 74.00000, 1.50600, 0.11711]
-n1 = ['034610-052628', 56.54279, 0.00013, -5.44133, 0.00017, 1400.00000, 0.09650, 0.00340]
-n2 = ['034613-052554', 56.55629, 0.00017, -5.43189, 0.00017, 1400.00000, 0.06330, 0.00230]
-n3 = ['034619-052714', 56.58154, 0.00013, -5.45408, 0.00017, 1400.00000, 0.17890, 0.00540]
+v3 = ['J223133-082422', 337.89135, 0.00239, -8.40619, 0.00215, 74.00000, 1.37858, 0.19718]
+n4 = ['223133-082431', 337.88808, 0.00017, -8.40886, 0.00017, 1400.00000, 0.23530, 0.00770]
+m1 = ['2229-086', 337.94410, 0.00125, -8.40920, 0.00139, 408.00000, 0.89000, 0.04000]
+v1 = ['J223144-082445', 337.93437, 0.00171, -8.41250, 0.00162, 74.00000, 3.64113, 0.30827]
+v2 = ['J223150-082444', 337.96222, 0.00171, -8.41246, 0.00162, 74.00000, 0.81108, 0.11785]
+n1 = ['223143-082433', 337.93233, 0.00182, -8.40931, 0.00182, 1400.00000, 0.24400, 0.00760]
+n2 = ['223147-082539', 337.94637, 0.00182, -8.42769, 0.00182, 1400.00000, 0.00980, 0.00090]
+n3 = ['223150-082442', 337.96187, 0.00017, -8.41167, 0.00017, 1400.00000, 0.26650, 0.00870]
 
-g1 = [2.85851,0.17890] ##v1,n3
+g1 = [3.64113,0.24400] ##v1,n1
 f1 = [74.0,1400.0]
 
-g2 = [1.50600,0.1598] ##v2,n1,n2
+g2 = [0.81108,0.26650] ##v2,n3
 f2 = [74.0,1400.0]
 
-g3 = [3.83079,0.22890] ##v1,n1
+g3 = [1.37858,0.23530] ##v3,n4
 f3 = [74.0,1400.0]
 
-vlssr = [v1,v2]
-nvss = [n1,n2,n3]
+vlssr = [v1,v2,v3]
+nvss = [n1,n2,n3,n4]
 sumss = []
 A154 = []
 A182 = []
 mrc = [m1]
 mwacs = []
 
-#comb_source = ['meh','','','','','',0.067,'']
+#nvss_source1 = ['meh','','','','','',0.0899,'']
+#nvss_source2 = ['meh','','','','','',0.0954,'']
+#sumss_source1 = ['meh','','','','','',0.1564,'']
 
 #weights1 = do_weights([s1,s2])
 #weight_flux(weights1,0.51246)
 
-#weights1 = do_weights([s1,s2])
-#weights2 = do_weights([n1,n2])
+#weights1 = do_weights([v1,v2])
+#weights2 = do_weights([n2,n3])
 ###weights3 = do_weights([n3,n2])
 #weights = 0.5*(np.array(weights1)+np.array(weights2))
 ###weights = (1/3.0)*(np.array(weights1)+np.array(weights2)+np.array(weights3))
-#weight_flux(weights,0.41201)
+#weight_flux(weights,1.11000)
 
-comb_pos([n1,n2])
+#comb_pos([n1,n2])
+#comb_pos([n3,n4])
 
-comb_flux = [g1,g2]
-comb_freqs = [f1,f2]
+comb_flux = [g1,g2,g3]
+comb_freqs = [f1,f2,f3]
 for flux,freq in zip(comb_flux,comb_freqs):
 	ax1.plot(np.log(freq),np.log(flux),label='g%d' %(comb_flux.index(flux)+1) )
 	data_fit,jstat,bse,chi_red = fit_line(np.log(freq),np.log(flux),'toot')

@@ -167,9 +167,9 @@ def find_extra(cat_name,print_cat,cat_data,image_cats,over_plots,wcss,source_nam
 		#print info
 		name,ra,rerr,dec,derr,flux,ferr,major,minor,PA,flag,ID = info
 		name = name.split()[0]
-		
 		if (name not in source_names) and (ra_min<float(ra)<ra_max) and (dec_min<float(dec)<dec_max):
 			if present_already=='no': print "extra ['%s', %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f]" %(name.split()[0],float(ra), float(rerr), float(dec), float(derr), float(freq), float(flux), float(ferr))
+			#print "extra ['%s', %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f]" %(name.split()[0],float(ra), float(rerr), float(dec), float(derr), float(freq), float(flux), float(ferr))
 			ra = float(ra)
 			dec = float(dec)
 			rerr = float(rerr)
@@ -562,9 +562,16 @@ for line in hack_info:
 				HACK.hack_name = piece
 		HACKS.append(HACK)
 
-hack_sources = open('srclist_hack_v1.txt','r').read().split('ENDSOURCE')
+hack_sources = open('srclist_hack_v2.txt','r').read().split('ENDSOURCE')
 hack_sources = hack_sources[:-1]
 
+hack_names = []
+
+for hack in hack_sources:
+	lines = hack.split('\n')
+	if lines[0]=='': del lines[0]
+	name = lines[0].split()[1]
+	hack_names.append(name)
 ##======================================================================================
 
 ##Input eyeball file
@@ -577,6 +584,8 @@ sources = []
 sources_stats = []
 
 EoR0_sources = []
+
+exisiting_hacks = []
 
 for comp in bayes_comp:
 
@@ -620,34 +629,44 @@ for comp in bayes_comp:
 			#Fiddle this number to plot certain information
 			i=0
 			
-			if src_all.names[0] in HACK_sources:
-				THIS_HACK = HACKS[HACK_sources.index(src_all.names[0])]
-				print "Already exists as %s EXT%s%s " %(THIS_HACK.hack_name,THIS_HACK.cat_name,THIS_HACK.cat_index)
-				#Do the image plots
-				do_plot_image(all_info,image_cats,image_files,present_cats,src_all.names,src_g,matches)
-				if src_all.names[0] in mwacs_names: index = mwacs_names.index(src_all.names[0])
-				elif src_all.names[0] in mrc_names: index = mrc_names.index(src_all.names[0])
+			#if src_all.names[0] in HACK_sources:
+				#THIS_HACK = HACKS[HACK_sources.index(src_all.names[0])]
+				#print "Already exists as %s EXT%s%s " %(THIS_HACK.hack_name,THIS_HACK.cat_name,THIS_HACK.cat_index)
+				##Do the image plots
+				#do_plot_image(all_info,image_cats,image_files,present_cats,src_all.names,src_g,matches)
+				#if src_all.names[0] in mwacs_names: index = mwacs_names.index(src_all.names[0])
+				#elif src_all.names[0] in mrc_names: index = mrc_names.index(src_all.names[0])
 					
-				#print image_num
-				#print "(EXT%s%s) %s %s '%s' '%s' ID %s %.5f Jy" %(src_all.cats[i],index,src_all.cats[i],src_all.names[i],deg_to_hour(src_all.ras[i],'info'),deg_to_degmins(src_all.decs[i],'info'),src_all.IDs[i], src_all.fluxs[i])
+				##print image_num
+				##print "(EXT%s%s) %s %s '%s' '%s' ID %s %.5f Jy" %(src_all.cats[i],index,src_all.cats[i],src_all.names[i],deg_to_hour(src_all.ras[i],'info'),deg_to_degmins(src_all.decs[i],'info'),src_all.IDs[i], src_all.fluxs[i])
 					
-				#for i in xrange(len(src_all.cats)):
-					#print "matched ['%s', %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f]" %(src_all.names[i],src_all.ras[i],src_all.rerrs[i],src_all.decs[i],src_all.derrs[i], src_all.freqs[i][0], src_all.fluxs[i][0],src_all.ferrs[i][0])
-				##if type(comb_source)!=str:
-					##for i in xrange(len(comb_source.cats)):
-						##print "combined '%s' %.5f %.5f %.5f %.5f %.5f %.5f %.5f" %(comb_source.names[i],comb_source.ras[i],comb_source.rerrs[i],comb_source.decs[i],comb_source.derrs[i], comb_source.freqs[i][0],comb_source.fluxs[i][0],comb_source.ferrs[i][0])
-				###THIS CAUSES WINDOW TO AUTOMATICALLY MAXIMISE
-				mng = plt.get_current_fig_manager()
-				mng.resize(*mng.window.maxsize())
-				##print plt.get_backend()
+				##for i in xrange(len(src_all.cats)):
+					##print "matched ['%s', %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f]" %(src_all.names[i],src_all.ras[i],src_all.rerrs[i],src_all.decs[i],src_all.derrs[i], src_all.freqs[i][0], src_all.fluxs[i][0],src_all.ferrs[i][0])
+				###if type(comb_source)!=str:
+					###for i in xrange(len(comb_source.cats)):
+						###print "combined '%s' %.5f %.5f %.5f %.5f %.5f %.5f %.5f" %(comb_source.names[i],comb_source.ras[i],comb_source.rerrs[i],comb_source.decs[i],comb_source.derrs[i], comb_source.freqs[i][0],comb_source.fluxs[i][0],comb_source.ferrs[i][0])
+				####THIS CAUSES WINDOW TO AUTOMATICALLY MAXIMISE
+				#mng = plt.get_current_fig_manager()
+				#mng.resize(*mng.window.maxsize())
+				###print plt.get_backend()
 				
 
-				plt.show()
+				#plt.show()
+			#else:
+			
+			if src_all.names[0] in mwacs_names: index = mwacs_names.index(src_all.names[0])
+			elif src_all.names[0] in mrc_names: index = mrc_names.index(src_all.names[0])
+			
+			exisiting_hacks.append("EXT%s%s" %(src_all.cats[i],index))
+			
+			if "EXT%s%s" %(src_all.cats[i],index) in hack_names:
+				pass
 			else:
+			
 				#Do the image plots
 				do_plot_image(all_info,image_cats,image_files,present_cats,src_all.names,src_g,matches)
-				if src_all.names[0] in mwacs_names: index = mwacs_names.index(src_all.names[0])
-				elif src_all.names[0] in mrc_names: index = mrc_names.index(src_all.names[0])
+				#if src_all.names[0] in mwacs_names: index = mwacs_names.index(src_all.names[0])
+				#elif src_all.names[0] in mrc_names: index = mrc_names.index(src_all.names[0])
 					
 				print image_num
 				print "(EXT%s%s) %s %s '%s' '%s' ID %s %.5f Jy" %(src_all.cats[i],index,src_all.cats[i],src_all.names[i],deg_to_hour(src_all.ras[i],'info'),deg_to_degmins(src_all.decs[i],'info'),src_all.IDs[i], src_all.fluxs[i])
@@ -667,3 +686,8 @@ for comp in bayes_comp:
 			print "--------------------------------------------------------------------------------------------------------------------------------------"
 	else:
 		pass
+	
+
+for hack in hack_names:
+	if hack not in exisiting_hacks:
+		print hack
