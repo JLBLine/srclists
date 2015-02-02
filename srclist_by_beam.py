@@ -25,7 +25,7 @@ parser.add_option('-s','--srclist',
 parser.add_option('-n','--num_sources',
 	help="Number of sources to put in the mage patch")
 parser.add_option('-p', '--plot',action='store_true', 
-	help='Plot the sources included')
+	help='Plot the sources included - NEEDS THE MODULE wcsaxes')
 
 (options, args) = parser.parse_args()
 
