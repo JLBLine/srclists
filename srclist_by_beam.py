@@ -1,3 +1,4 @@
+#!/usr/bin/python
 '''Script to create a single mega-patch calibrator based on the primary beam
 convolved with the source fluxes'''
 try:
