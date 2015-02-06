@@ -20,6 +20,6 @@
    given number of sources in a megapatch srclist. These 
    will be brightest sources once convolved with the beam, 
    as defined by the pointing given by a designated metafits
-   file. The sources are also confined to within 20 deg of 
-   the given pointing centre. To use the plotting option 
+   file. The sources are also confined to a user specified
+   distance of the pointing centre. To use the plotting option 
    (-p), wscaxes module is needed.
