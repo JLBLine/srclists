@@ -27,8 +27,12 @@ parser.add_option('-n','--num_sources',
 	help="Number of sources to put in the mage patch")
 parser.add_option('-p', '--plot',action='store_true', 
 	help='Plot the sources included - NEEDS THE MODULE wcsaxes')
+parser.add_option('-c', '--cutoff', default=20.0,
+	help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 
 (options, args) = parser.parse_args()
+
+cutoff = float(options.cutoff)
 
 def hour_to_deg(time):      #converts hh:mm:ss.ss in to degrees, must input as a string
 	negtest=time[0]
@@ -149,7 +153,7 @@ for split_source in rts_srcs:
 	meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
 	##IF LOOP HERE TO DO DISTANCE CUTOFF========================================
 	##==========================================================================
-	if arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))<20:
+	if arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec)) <= cutoff:
 		
 		##Put in to the source class
 		source.name = prim_name
