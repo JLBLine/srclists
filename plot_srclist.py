@@ -79,20 +79,11 @@ if options.srclist!=-1:
 				rts_components.append(comp)
 						
 
-source_ras = [source.srcra for source in rts_sources]# if 'EXT' not in source.name]
-source_decs = [source.srcdec for source in rts_sources]# if 'EXT' not in source.name]
+source_ras = [source.srcra for source in rts_sources]
+source_decs = [source.srcdec for source in rts_sources]
 
-comp_ras = [source.srcra for source in rts_components]# if 'EXT' not in source.name]
-comp_decs = [source.srcdec for source in rts_components]# if 'EXT' not in source.name]
-
-#EXT_ras = [source.srcra for source in rts_components if 'EXT' in source.name]
-#EXT_decs = [source.srcdec for source in rts_components if 'EXT' in source.name]
-
-
-#ax.scatter(EXT_ras,EXT_decs,marker='s',transform=tr_fk5,color='r',label="EXTENDED")
-#ax.scatter(comp_ras,comp_decs,marker='o',transform=tr_fk5,color='b',label="COMPONENT",s=14,facecolor='none',linewidth=2)
-
-#ax.scatter(source_ras,source_decs,marker='D',transform=tr_fk5,color='m',label='SOURCE',s=50,facecolor='none',linewidth=3)
+comp_ras = [source.srcra for source in rts_components]
+comp_decs = [source.srcdec for source in rts_components]
 
 ax.plot(comp_ras,comp_decs,'o',color='#FFFF00',transform=tr_fk5,label="COMPONENT",markersize=10,markeredgecolor='k',markeredgewidth=2.0)
 ax.plot(source_ras,source_decs,'*',color='c',transform=tr_fk5,label="BASE SOURCE",markersize=30,markeredgecolor='k',markeredgewidth=1.0)
