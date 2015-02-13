@@ -29,6 +29,8 @@ parser.add_option('-p', '--plot',action='store_true',
 	help='Plot the sources included - NEEDS THE MODULE wcsaxes')
 parser.add_option('-c', '--cutoff', default=20.0,
 	help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
+parser.add_option('-o', '--order', default='flux',
+	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first. Default = "flux"')
 
 (options, args) = parser.parse_args()
 
@@ -91,6 +93,7 @@ class rts_source():
 		self.fluxs = []
 		self.extrap_fluxs = []
 		self.weighted_flux = -1
+		self.offset = -1
 		
 def extrap_flux(freqs,fluxs,extrap_freq):
 	'''f1/f2 = (nu1/n2)**alpha
@@ -153,12 +156,15 @@ for split_source in rts_srcs:
 	meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
 	##IF LOOP HERE TO DO DISTANCE CUTOFF========================================
 	##==========================================================================
-	if arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec)) <= cutoff:
+	
+	offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
+	if offset <= cutoff:
 		
 		##Put in to the source class
 		source.name = prim_name
 		source.ras.append(float(prim_ra))
 		source.decs.append(float(prim_dec))
+		source.offset = offset
 		##Find the fluxes and append to the source class
 		prim_freqs = []
 		prim_fluxs = []
@@ -224,7 +230,7 @@ for split_source in rts_srcs:
 			##This is the power in XX,YY - this is taken from primary_beam.MWA_Tile_advanced - prints out
 			##lots of debugging messages so have pulled it out of the function
 			XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
-			overall_power = 0.5*(XX[0]+YY[0])   ###CHECK THIS
+			overall_power = n.sqrt(XX[0]**2+YY[0]**2)   ###CHECK THIS - go for rms as this is how Stokes I is made
 			beam_weights.append(overall_power[0])
 		
 		source.beam_weights = beam_weights
@@ -237,7 +243,13 @@ for split_source in rts_srcs:
 	
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
-ordered_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)]
+weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
+
+if options.order=='flux':
+	ordered_sources = weighted_sources
+elif options.order=='distance':
+	ordered_offsets = [source.offset for source in weighted_sources]
+	ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
 
 ##Get the brighest source within the central 5 degrees of pointing
 ##OR
@@ -286,10 +298,10 @@ if options.plot:
 	'CRVAL1' : 0.0,        ##Central X world coord value
 	'CRPIX1' : 5,                    ##Central X Pixel value
 	'CUNIT1' : 'deg',                ##Unit of X axes
-	'CDELT1' : -1*cos(-61.0*(pi/180.0)),              ##Size of pixel in world co-ord
+	'CDELT1' : -1*cos(0.0*(pi/180.0)),              ##Size of pixel in world co-ord
 	'NAXIS2' : 10,                  ##Length of X axis
 	'CTYPE2' : 'DEC--SIN',           ##Projection along Y axis
-	'CRVAL2' : -61.0,                   ##Central Y world coord value
+	'CRVAL2' : -27.0,                   ##Central Y world coord value
 	'CRPIX2' : 5,                    ##Central Y Pixel value
 	'CUNIT2' : 'deg',                ##Unit of Y world coord
 	'CDELT2' : +1      		     ##Size of pixel in deg
@@ -303,7 +315,7 @@ if options.plot:
 	fig.add_axes(ax)
 	tr_fk5 = ax.get_transform("fk5")
 
-	for source in ordered_sources[:int(options.num_sources)]:
+	for source in ordered_sources:
 		#print source.ras[0],source.decs[0],source.weighted_flux
 		ra = source.ras[0]*15.0
 		#if ra>180.0: ra-=360.0
