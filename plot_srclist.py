@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''Script to plot srclists over specified RA,Dec ranges over the top'''
+'''Script to plot srclists with a specified field centre'''
 
 from astropy.wcs import WCS
 from wcsaxes import WCSAxes
@@ -104,5 +104,7 @@ ra_ax.set_ticks(spacing=600 * units.arcmin)
 dec_ax.set_ticks(spacing=600 * units.arcmin)
 
 g = ax.coords.grid(linewidth=1.0,alpha=1.0)
+
+ax.legend(loc='best')
 
 plt.show()
