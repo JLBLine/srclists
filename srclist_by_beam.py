@@ -269,9 +269,12 @@ elif 'experimental' in options.order:
 				close_fluxs.append(flux)
 				close_dists.append(offset)
 		dist_cut+=0.5
+		if dist_cut>cutoff:
+			print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy with initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
+			sys.exit()
 
 	##This is the brightest source within the base source cutoff distance
-	brightest_close_flux = sorted(close_fluxs)[0]
+	brightest_close_flux = sorted(close_fluxs,reverse=True)[0]
 	
 	##This is where the bright close source appears in the beam weighted source list
 	weighted_fluxes = [source.weighted_flux for source in weighted_sources]
@@ -282,7 +285,7 @@ elif 'experimental' in options.order:
 	weighted_offsets = [source.offset for source in weighted_sources]
 	brightest_close_offset = weighted_offsets[brightest_ind]
 	
-	print "Base source convolved flux is %.3fJy at a distance of %.3fdeg from point centre" %(brightest_close_flux,brightest_close_offset)
+	print "++++++++++++++++++++++++++++++++++++++\nBase source convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_flux,brightest_close_offset)
 	
 	##Put this source at the top of the ordered list, and then append all other sources after
 	##NOTE - this means that apart from the top source, all other sources are flux ordered.
@@ -318,7 +321,7 @@ for source in ordered_sources[1:int(options.num_sources)]:
 out_file.write('\nENDSOURCE')
 out_file.close()
 
-print "Created %s" %output_name
+print "Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name
 ##Finito!!
 
 if options.plot:
