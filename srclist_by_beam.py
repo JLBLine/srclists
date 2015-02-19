@@ -30,7 +30,7 @@ parser.add_option('-p', '--plot',action='store_true',
 parser.add_option('-c', '--cutoff', default=20.0,
 	help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 parser.add_option('-o', '--order', default='flux',
-	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first. Default = "flux"')
+	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first, "experimental" for a combination. Default = "flux". To use default experimental, "experimental". Other, enter "experimental=flux,distance" with flux cutoff in Jy and distance cutoff in deg. ')
 
 (options, args) = parser.parse_args()
 
@@ -250,11 +250,47 @@ if options.order=='flux':
 elif options.order=='distance':
 	ordered_offsets = [source.offset for source in weighted_sources]
 	ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
+	
+elif 'experimental' in options.order:
+	if len(options.order.split('='))==1:
+		flux_cut,dist_cut = 10.0,1.0
+	else:
+		flux_cut,dist_cut = options.order.split('=')[1].split(',')
+	
+	close_fluxs = []
+	close_dists = []
+	dist_cut = float(dist_cut)
+	
+	##Try to find all sources within distance cutoff above flux threshold - if none exist, extend search
+	##radii by 0.5 deg
+	while len(close_fluxs)==0:
+		for flux,offset in zip([src.weighted_flux for src in weighted_sources],[src.offset for src in weighted_sources]):
+			if flux>float(flux_cut) and offset<dist_cut:
+				close_fluxs.append(flux)
+				close_dists.append(offset)
+		dist_cut+=0.5
 
-##Get the brighest source within the central 5 degrees of pointing
-##OR
-##Get the brighest source in the centre of the mega patch
-
+	##This is the brightest source within the base source cutoff distance
+	brightest_close_flux = sorted(close_fluxs)[0]
+	
+	##This is where the bright close source appears in the beam weighted source list
+	weighted_fluxes = [source.weighted_flux for source in weighted_sources]
+	brightest_ind = weighted_fluxes.index(brightest_close_flux)
+	
+	##Use the positional offset as an identifier as well in case so other source has the
+	##same flux
+	weighted_offsets = [source.offset for source in weighted_sources]
+	brightest_close_offset = weighted_offsets[brightest_ind]
+	
+	print "Base source convolved flux is %.3fJy at a distance of %.3fdeg from point centre" %(brightest_close_flux,brightest_close_offset)
+	
+	##Put this source at the top of the ordered list, and then append all other sources after
+	##NOTE - this means that apart from the top source, all other sources are flux ordered.
+	ordered_sources = [weighted_sources[brightest_ind]]
+	for source in weighted_sources:
+		if source.weighted_flux!=brightest_close_flux and source.offset!=brightest_close_offset:
+			ordered_sources.append(source)
+	
 ##Make a new single patch source based on the user specified number of components
 output_name = "%s_%s_cal%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
 out_file = open(output_name,'w+')
