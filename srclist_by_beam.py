@@ -270,7 +270,7 @@ elif 'experimental' in options.order:
 				close_dists.append(offset)
 		dist_cut+=0.5
 		if dist_cut>cutoff:
-			print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy with initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
+			print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy within initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
 			sys.exit()
 
 	##This is the brightest source within the base source cutoff distance
@@ -285,7 +285,11 @@ elif 'experimental' in options.order:
 	weighted_offsets = [source.offset for source in weighted_sources]
 	brightest_close_offset = weighted_offsets[brightest_ind]
 	
-	print "++++++++++++++++++++++++++++++++++++++\nBase source convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_flux,brightest_close_offset)
+	##Find out name of source
+	weighted_names = [source.name for source in weighted_sources]
+	brightest_close_name = weighted_names[brightest_ind]
+	
+	print "++++++++++++++++++++++++++++++++++++++\nBase source %s convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_name,brightest_close_flux,brightest_close_offset)
 	
 	##Put this source at the top of the ordered list, and then append all other sources after
 	##NOTE - this means that apart from the top source, all other sources are flux ordered.
