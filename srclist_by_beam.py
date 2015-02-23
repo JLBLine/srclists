@@ -24,13 +24,13 @@ parser.add_option('-m','--metafits',
 parser.add_option('-s','--srclist',
 	help="Base srclist to get source info from")
 parser.add_option('-n','--num_sources',
-	help="Number of sources to put in the mage patch")
+	help="Number of sources to put in the mega patch")
 parser.add_option('-p', '--plot',action='store_true', 
 	help='Plot the sources included - NEEDS THE MODULE wcsaxes')
 parser.add_option('-c', '--cutoff', default=20.0,
 	help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 parser.add_option('-o', '--order', default='flux',
-	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first, "experimental" for a combination. Default = "flux". To use default experimental, "experimental". Other, enter "experimental=flux,distance" with flux cutoff in Jy and distance cutoff in deg. ')
+	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first, "experimental" for a combination, "name=*sourcename*" to force a calibrator. Default = "flux". {To use default experimental, "experimental". Other, enter "experimental=flux,distance" with flux cutoff in Jy and distance cutoff in deg.} ')
 
 (options, args) = parser.parse_args()
 
@@ -247,9 +247,21 @@ weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sour
 
 if options.order=='flux':
 	ordered_sources = weighted_sources
+
 elif options.order=='distance':
 	ordered_offsets = [source.offset for source in weighted_sources]
 	ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
+	
+	
+elif 'name' in options.order:
+	name = options.order.split("=")[1]
+	top_source_ind = [source.name for source in weighted_sources].index(name)
+	top_source = weighted_sources[top_source_ind]
+	ordered_sources = [top_source]
+	for i in xrange(len(weighted_sources)):
+		if i!=top_source_ind:
+			ordered_sources.append(weighted_sources[i])
+	print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
 	
 elif 'experimental' in options.order:
 	if len(options.order.split('='))==1:
