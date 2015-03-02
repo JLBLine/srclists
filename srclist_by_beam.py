@@ -19,6 +19,8 @@ import numpy as n
 ## - Add precess options?
 
 parser = OptionParser()
+parser.add_option('-x','--no_patch', action='store_true',
+	help="Switch on to not put the sources in to a patch")
 parser.add_option('-m','--metafits', 
 	help="metafits file to get obs info from")
 parser.add_option('-s','--srclist',
@@ -198,8 +200,15 @@ for split_source in rts_srcs:
 		
 		##For each set of source infomation, calculate and extrapolated flux at the centra flux value
 		for freqs,fluxs in zip(source.freqs,source.fluxs):
+
+			##If only one freq, extrap with an SI of -0.8:
+			if len(freqs)==1:
+				##f1 = c*v1**-0.8
+				##c = f1 / (v1**-0.8)
+				c = fluxs[0] / (freqs[0]**-0.8)
+				ext_flux = c*freqcent**-0.8
 			##If extrapolating below known freqs, choose two lowest frequencies
-			if min(freqs)>freqcent:
+			elif min(freqs)>freqcent:
 				ext_flux = extrap_flux([freqs[0],freqs[1]],[fluxs[0],fluxs[1]],freqcent)
 			##If extrapolating above known freqs, choose two highest frequencies
 			elif max(freqs)<freqcent:
@@ -245,97 +254,128 @@ for split_source in rts_srcs:
 all_weighted_fluxs = [source.weighted_flux for source in sources]
 weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
 
-if options.order=='flux':
-	ordered_sources = weighted_sources
 
-elif options.order=='distance':
-	ordered_offsets = [source.offset for source in weighted_sources]
-	ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
-	
-	
-elif 'name' in options.order:
-	name = options.order.split("=")[1]
-	top_source_ind = [source.name for source in weighted_sources].index(name)
-	top_source = weighted_sources[top_source_ind]
-	ordered_sources = [top_source]
-	for i in xrange(len(weighted_sources)):
-		if i!=top_source_ind:
-			ordered_sources.append(weighted_sources[i])
-	print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
-	
-elif 'experimental' in options.order:
-	if len(options.order.split('='))==1:
-		flux_cut,dist_cut = 10.0,1.0
-	else:
-		flux_cut,dist_cut = options.order.split('=')[1].split(',')
-	
-	close_fluxs = []
-	close_dists = []
-	dist_cut = float(dist_cut)
-	
-	##Try to find all sources within distance cutoff above flux threshold - if none exist, extend search
-	##radii by 0.5 deg
-	while len(close_fluxs)==0:
-		for flux,offset in zip([src.weighted_flux for src in weighted_sources],[src.offset for src in weighted_sources]):
-			if flux>float(flux_cut) and offset<dist_cut:
-				close_fluxs.append(flux)
-				close_dists.append(offset)
-		dist_cut+=0.5
-		if dist_cut>cutoff:
-			print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy within initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
-			sys.exit()
-
-	##This is the brightest source within the base source cutoff distance
-	brightest_close_flux = sorted(close_fluxs,reverse=True)[0]
-	
-	##This is where the bright close source appears in the beam weighted source list
-	weighted_fluxes = [source.weighted_flux for source in weighted_sources]
-	brightest_ind = weighted_fluxes.index(brightest_close_flux)
-	
-	##Use the positional offset as an identifier as well in case so other source has the
-	##same flux
-	weighted_offsets = [source.offset for source in weighted_sources]
-	brightest_close_offset = weighted_offsets[brightest_ind]
-	
-	##Find out name of source
-	weighted_names = [source.name for source in weighted_sources]
-	brightest_close_name = weighted_names[brightest_ind]
-	
-	print "++++++++++++++++++++++++++++++++++++++\nBase source %s convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_name,brightest_close_flux,brightest_close_offset)
-	
-	##Put this source at the top of the ordered list, and then append all other sources after
-	##NOTE - this means that apart from the top source, all other sources are flux ordered.
-	ordered_sources = [weighted_sources[brightest_ind]]
-	for source in weighted_sources:
-		if source.weighted_flux!=brightest_close_flux and source.offset!=brightest_close_offset:
-			ordered_sources.append(source)
-	
-##Make a new single patch source based on the user specified number of components
-output_name = "%s_%s_cal%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
-out_file = open(output_name,'w+')
-
-##Print out the strongest source as the primary calibator
-for source in ordered_sources[:1]:
-	out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
-	for flux,freq in zip(source.fluxs[0],source.freqs[0]):
-		out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
-	##Cycle through any components in that primary calibator
-	for i in range(1,len(source.ras)):
-		out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
-		for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+if options.no_patch:
+	print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
+	output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+	out_file = open(output_name,'w+')
+	for source in weighted_sources[:1]:
+		out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
-		out_file.write('\nENDCOMPONENT')
-		
-##For all other sources, add all information as COMPONENTS
-for source in ordered_sources[1:int(options.num_sources)]:
-	for i in xrange(len(source.ras)):
-		out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
-		for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+		##Cycle through any components in that primary calibator
+		for i in range(1,len(source.ras)):
+			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			out_file.write('\nENDCOMPONENT')
+		out_file.write('\nENDSOURCE')
+	
+	for source in weighted_sources[1:int(options.num_sources)]:
+		out_file.write('\nSOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
-		out_file.write('\nENDCOMPONENT')
+		##Cycle through any components in that primary calibator
+		for i in range(1,len(source.ras)):
+			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			out_file.write('\nENDCOMPONENT')
+		out_file.write('\nENDSOURCE')
+	out_file.close()
+
+else:
+	if options.order=='flux':
+		ordered_sources = weighted_sources
+
+	elif options.order=='distance':
+		ordered_offsets = [source.offset for source in weighted_sources]
+		ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
 		
-out_file.write('\nENDSOURCE')
-out_file.close()
+		
+	elif 'name' in options.order:
+		name = options.order.split("=")[1]
+		top_source_ind = [source.name for source in weighted_sources].index(name)
+		top_source = weighted_sources[top_source_ind]
+		ordered_sources = [top_source]
+		for i in xrange(len(weighted_sources)):
+			if i!=top_source_ind:
+				ordered_sources.append(weighted_sources[i])
+		print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
+		
+	elif 'experimental' in options.order:
+		if len(options.order.split('='))==1:
+			flux_cut,dist_cut = 10.0,1.0
+		else:
+			flux_cut,dist_cut = options.order.split('=')[1].split(',')
+		
+		close_fluxs = []
+		close_dists = []
+		dist_cut = float(dist_cut)
+		
+		##Try to find all sources within distance cutoff above flux threshold - if none exist, extend search
+		##radii by 0.5 deg
+		while len(close_fluxs)==0:
+			for flux,offset in zip([src.weighted_flux for src in weighted_sources],[src.offset for src in weighted_sources]):
+				if flux>float(flux_cut) and offset<dist_cut:
+					close_fluxs.append(flux)
+					close_dists.append(offset)
+			dist_cut+=0.5
+			if dist_cut>cutoff:
+				print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy within initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
+				sys.exit()
+
+		##This is the brightest source within the base source cutoff distance
+		brightest_close_flux = sorted(close_fluxs,reverse=True)[0]
+		
+		##This is where the bright close source appears in the beam weighted source list
+		weighted_fluxes = [source.weighted_flux for source in weighted_sources]
+		brightest_ind = weighted_fluxes.index(brightest_close_flux)
+		
+		##Use the positional offset as an identifier as well in case so other source has the
+		##same flux
+		weighted_offsets = [source.offset for source in weighted_sources]
+		brightest_close_offset = weighted_offsets[brightest_ind]
+		
+		##Find out name of source
+		weighted_names = [source.name for source in weighted_sources]
+		brightest_close_name = weighted_names[brightest_ind]
+		
+		print "++++++++++++++++++++++++++++++++++++++\nBase source %s convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_name,brightest_close_flux,brightest_close_offset)
+		
+		##Put this source at the top of the ordered list, and then append all other sources after
+		##NOTE - this means that apart from the top source, all other sources are flux ordered.
+		ordered_sources = [weighted_sources[brightest_ind]]
+		for source in weighted_sources:
+			if source.weighted_flux!=brightest_close_flux and source.offset!=brightest_close_offset:
+				ordered_sources.append(source)
+		
+	##Make a new single patch source based on the user specified number of components
+	output_name = "%s_%s_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+	out_file = open(output_name,'w+')
+
+	##Print out the strongest source as the primary calibator
+	for source in ordered_sources[:1]:
+		out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
+			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+		##Cycle through any components in that primary calibator
+		for i in range(1,len(source.ras)):
+			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			out_file.write('\nENDCOMPONENT')
+			
+	##For all other sources, add all information as COMPONENTS
+	for source in ordered_sources[1:int(options.num_sources)]:
+		for i in xrange(len(source.ras)):
+			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			out_file.write('\nENDCOMPONENT')
+			
+	out_file.write('\nENDSOURCE')
+	out_file.close()
 
 print "Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name
 ##Finito!!
@@ -369,6 +409,10 @@ if options.plot:
 	ax = WCSAxes(fig, [0.1, 0.1, 0.8, 0.8], wcs=wcs)
 	fig.add_axes(ax)
 	tr_fk5 = ax.get_transform("fk5")
+	
+	if options.no_patch:
+		print len(weighted_sources)
+		ordered_sources = weighted_sources[int(options.num_sources)]
 
 	for source in ordered_sources:
 		#print source.ras[0],source.decs[0],source.weighted_flux
