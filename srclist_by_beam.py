@@ -260,7 +260,7 @@ if options.no_patch:
 	output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
 	out_file = open(output_name,'w+')
 	for source in weighted_sources[:1]:
-		out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		out_file.write('SOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
 		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
 		##Cycle through any components in that primary calibator
@@ -272,7 +272,7 @@ if options.no_patch:
 		out_file.write('\nENDSOURCE')
 	
 	for source in weighted_sources[1:int(options.num_sources)]:
-		out_file.write('\nSOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
 		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
 		##Cycle through any components in that primary calibator
