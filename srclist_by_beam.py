@@ -96,6 +96,8 @@ class rts_source():
 		self.extrap_fluxs = []
 		self.weighted_flux = -1
 		self.offset = -1
+		self.shapelet = None
+		self.coeffs = []
 		
 def extrap_flux(freqs,fluxs,extrap_freq):
 	'''f1/f2 = (nu1/n2)**alpha
@@ -123,18 +125,7 @@ mwa_lat = mwa.lat
 d = mwa_tile.Dipole(type='lookup')
 tile = mwa_tile.ApertureArray(dipoles=[d]*16)
 
-#delays = array([0]*16)
-#delays_init = array([0]*16)
-#delays = array([6,4,2,0,6,4,2,0,6,4,2,0,6,4,2,0])
-#delays_init = array([6,4,2,0,6,4,2,0,6,4,2,0,6,4,2,0])
-
-##Delays have to be in a (2,16) shaped array for the beam functions to work
-if delays.shape == (16,):
-	try:
-		delays=repeat(reshape(delays,(1,16)),2,axis=0)
-	except:
-		print 'Unable to convert delays (shape=%s) to (2,16)' % (delays.shape)
-assert delays.shape == (2,16), "Delays %s have unexpected shape %s" % (delays,delays.shape)
+delays=repeat(reshape(delays,(1,16)),2,axis=0)
 
 sources = []
 
@@ -180,7 +171,7 @@ for split_source in rts_srcs:
 		##Split all info into lines and get rid of blank entries
 		lines = split_source.split('\n')
 		lines = [line for line in lines if line!='']
-		##If the are components to the source, see where the components start and end
+		##If there are components to the source, see where the components start and end
 		comp_starts = [lines.index(line) for line in lines if 'COMPONENT' in line and 'END' not in line]
 		comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
 		
@@ -197,6 +188,12 @@ for split_source in rts_srcs:
 					fluxs.append(float(line.split()[2]))
 			source.fluxs.append(fluxs)
 			source.freqs.append(freqs)
+			
+		##Check to see if a shapelet source - if so, append the line to a list in
+		##the rts source class
+		for line in lines:
+			if 'COEFF' in line: source.coeffs.append(line)
+			elif 'SHAPELET' in line: source.shapelet = line
 		
 		##For each set of source infomation, calculate and extrapolated flux at the centra flux value
 		for freqs,fluxs in zip(source.freqs,source.fluxs):
@@ -254,7 +251,6 @@ for split_source in rts_srcs:
 all_weighted_fluxs = [source.weighted_flux for source in sources]
 weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
 
-
 if options.no_patch:
 	print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
 	output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
@@ -269,7 +265,11 @@ if options.no_patch:
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
 			out_file.write('\nENDCOMPONENT')
-		out_file.write('\nENDSOURCE')
+		##Cycle through shapelet coeffs in primary calibator if present
+		if source.shapelet:
+			out_file.write('\n'+source.shapelet)
+			for coeff in source.coeffs:
+				out_file.write('\n'+coeff)
 	
 	for source in weighted_sources[1:int(options.num_sources)]:
 		out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
@@ -281,6 +281,12 @@ if options.no_patch:
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
 			out_file.write('\nENDCOMPONENT')
+		if source.shapelet:
+			out_file.write('\n'+source.shapelet)
+			for coeff in source.coeffs:
+				out_file.write('\n'+coeff)
+			
+			
 		out_file.write('\nENDSOURCE')
 	out_file.close()
 
@@ -365,6 +371,10 @@ else:
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
 			out_file.write('\nENDCOMPONENT')
+		if source.shapelet:
+			out_file.write('\n'+source.shapelet)
+			for coeff in source.coeffs:
+				out_file.write('\n'+coeff)
 			
 	##For all other sources, add all information as COMPONENTS
 	for source in ordered_sources[1:int(options.num_sources)]:
@@ -372,7 +382,12 @@ else:
 			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			if source.shapelet:
+				out_file.write('\n'+source.shapelet)
+				for coeff in source.coeffs:
+					out_file.write('\n'+coeff)
 			out_file.write('\nENDCOMPONENT')
+		
 			
 	out_file.write('\nENDSOURCE')
 	out_file.close()

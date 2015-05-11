@@ -119,7 +119,7 @@ src_decs = [source.srcdec for source in rts_sources]
 
 if options.parent_srclist==0:
 	ax.plot(comp_ras,comp_decs,'o',color='#FFFF00',transform=tr_fk5,label="COMPONENT",markersize=10,markeredgecolor='k',markeredgewidth=2.0)
-	ax.plot(src_ras,src_decs,'*',color='c',transform=tr_fk5,label="BASE SOURCE",markersize=30,markeredgecolor='k',markeredgewidth=1.0)
+	ax.plot(src_ras,src_decs,'*',color='c',transform=tr_fk5,label="BASE SOURCE",markersize=20,markeredgecolor='k',markeredgewidth=1.0)
 
 else:
 	def split_sources(sources):
@@ -224,8 +224,35 @@ if options.metafits!=0:
 	min_ra = min([min(comp_scaled),min(src_scaled)])
 	max_ra = max([max(comp_scaled),max(src_scaled)])
 	
+	if min_dec - 10 < -90:
+		min_dec_mesh = -90.0
+	else:
+		min_dec_mesh = min_dec - 10
+		
+	if max_dec - 10 < -90:
+		max_dec_mesh = -90.0
+	else:
+		max_dec_mesh = max_dec + 10
+		
+	#if LST-max_ra-10 < -180.0:
+		#min_HA_mesh = -180
+	#else:
+		#min_HA_mesh = LST-max_ra-10
+		
+	#print LST - min_ra+10
+		
+	#if LST - min_ra+10 > 360.0:
+		#max_HA_mesh = LST - min_ra+10 - 360.0
+	#else:
+		#max_HA_mesh = LST - min_ra + 10
+		
+	max_HA_mesh = LST - min_ra+10
+	min_HA_mesh = LST - max_ra-10
+	
+	print min_HA_mesh,max_HA_mesh,min_dec_mesh,max_dec_mesh
+	
 	#Set up a HA,Dec axes that covers more than the image
-	HA,Dec=meshgrid(arange(LST-max_ra-10,LST - min_ra+10,0.5),arange(min_dec - 10,max_dec + 10,0.5))
+	HA,Dec=meshgrid(arange(min_HA_mesh,max_HA_mesh+0.5,0.5),arange(min_dec_mesh,max_dec_mesh+0.5,0.5))
 	
 	#Covert to Az,Alt
 	mwa=ephem_utils.Obs[ephem_utils.obscode['MWA']]
@@ -256,20 +283,29 @@ if options.metafits!=0:
 	CS = ax.contour(LST - HA,Dec,Z2,contourlevels,colors='k',transform=tr_fk5,alpha=0.7)
 	ax.clabel(CS, inline=1, fontsize=16)
 	
-	print max_ra,min_ra
 	
-	ax.set_xlim(wcs.wcs_world2pix(max_ra+5,DEC,0)[0],wcs.wcs_world2pix(min_ra-5,DEC,0)[0])
-	ax.set_ylim(wcs.wcs_world2pix(RA,min_dec-1,0)[1],wcs.wcs_world2pix(RA,max_dec+1,0)[1])
+	RA_up = LST - max_HA_mesh
+	RA_down = LST - min_HA_mesh
+	
+	if max_ra - min_ra < 200:
+		ax.set_xlim(wcs.wcs_world2pix(max_ra + 5,DEC,0)[0],wcs.wcs_world2pix(min_ra - 5,DEC,0)[0])
+	else:
+		pass
+		
+	if min_dec_mesh<-88:
+		ax.set_ylim(wcs.wcs_world2pix(RA,min_dec_mesh,0)[1],wcs.wcs_world2pix(RA,max_dec_mesh-7.0,0)[1])
+	else:
+		ax.set_ylim(wcs.wcs_world2pix(RA,min_dec_mesh,0)[1],wcs.wcs_world2pix(RA,max_dec_mesh,0)[1])
 	
 ra_ax = ax.coords[0]
 dec_ax = ax.coords[1]
 ra_ax.set_axislabel('RAJ2000')
 dec_ax.set_axislabel('DECJ2000')
-ra_ax.set_major_formatter('hh:mm:ss')#,font='Computer Modern Typewriter')
+ra_ax.set_major_formatter('hh')#,font='Computer Modern Typewriter')
 dec_ax.set_major_formatter('dd:mm:ss')
 
-ra_ax.set_ticks(spacing=600 * units.arcmin)
-dec_ax.set_ticks(spacing=600 * units.arcmin)
+ra_ax.set_ticks(spacing=900 * units.arcmin)
+dec_ax.set_ticks(spacing=900 * units.arcmin)
 
 g = ax.coords.grid(linewidth=1.0,alpha=1.0)
 
