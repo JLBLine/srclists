@@ -13,6 +13,7 @@ import sys
 from optparse import OptionParser,OptionGroup
 import matplotlib.pyplot as plt
 import numpy as n
+import subprocess
 
 
 ##TO DO: 
@@ -33,6 +34,8 @@ parser.add_option('-c', '--cutoff', default=20.0,
 	help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 parser.add_option('-o', '--order', default='flux',
 	help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first, "experimental" for a combination, "name=*sourcename*" to force a calibrator. Default = "flux". {To use default experimental, "experimental". Other, enter "experimental=flux,distance" with flux cutoff in Jy and distance cutoff in deg.} ')
+parser.add_option('-a', '--outside',action='store_true', default=False,
+	help='Switch on to only consider sources OUTSIDE of the cutoff, rather than inside')
 
 (options, args) = parser.parse_args()
 
@@ -127,98 +130,86 @@ tile = mwa_tile.ApertureArray(dipoles=[d]*16)
 
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
 
-sources = []
-
 ##Read in the srclist information
 rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
 del rts_srcs[-1]
 
-##Go through all sources in the source list, gather their information, extrapolate
-##the flux to the central frequency and weight by the beam at that position
-for split_source in rts_srcs:
+def create_sources(source):
+	##Put in to the source class
+	source.name = prim_name
+	source.ras.append(float(prim_ra))
+	source.decs.append(float(prim_dec))
+	source.offset = offset
+	##Find the fluxes and append to the source class
+	prim_freqs = []
+	prim_fluxs = []
+	for line in primary_info:
+		if 'FREQ' in line:
+			prim_freqs.append(float(line.split()[1]))
+			prim_fluxs.append(float(line.split()[2]))
+	source.freqs.append(prim_freqs)
+	source.fluxs.append(prim_fluxs)
 	
-	source = rts_source()
+	##Split all info into lines and get rid of blank entries
+	lines = split_source.split('\n')
+	lines = [line for line in lines if line!='']
+	##If there are components to the source, see where the components start and end
+	comp_starts = [lines.index(line) for line in lines if 'COMPONENT' in line and 'END' not in line]
+	comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
 	
-	##Find the primary source info - even if no comps, this will isolate
-	##primary source infomation
+	##For each component, go through and find ra,dec,freqs and fluxs
+	for start,end in zip(comp_starts,comp_ends):
+		freqs = []
+		fluxs = []
+		for line in lines[start:end]:
+			if 'COMPONENT' in line:
+				source.ras.append(float(line.split()[1]))
+				source.decs.append(float(line.split()[2]))
+			elif 'FREQ' in line:
+				freqs.append(float(line.split()[1]))
+				fluxs.append(float(line.split()[2]))
+		source.fluxs.append(fluxs)
+		source.freqs.append(freqs)
+		
+	##Check to see if a shapelet source - if so, append the line to a list in
+	##the rts source class
+	for line in lines:
+		if 'COEFF' in line: source.coeffs.append(line)
+		elif 'SHAPELET' in line: source.shapelet = line
 	
-	primary_info = split_source.split('COMPONENT')[0].split('\n')
-	#print primary_info
-	primary_info = [info for info in primary_info if info!='']
-	#print primary_info[0]
-	meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
-	##IF LOOP HERE TO DO DISTANCE CUTOFF========================================
-	##==========================================================================
-	
-	offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
-	if offset <= cutoff:
-		
-		##Put in to the source class
-		source.name = prim_name
-		source.ras.append(float(prim_ra))
-		source.decs.append(float(prim_dec))
-		source.offset = offset
-		##Find the fluxes and append to the source class
-		prim_freqs = []
-		prim_fluxs = []
-		for line in primary_info:
-			if 'FREQ' in line:
-				prim_freqs.append(float(line.split()[1]))
-				prim_fluxs.append(float(line.split()[2]))
-		source.freqs.append(prim_freqs)
-		source.fluxs.append(prim_fluxs)
-		
-		##Split all info into lines and get rid of blank entries
-		lines = split_source.split('\n')
-		lines = [line for line in lines if line!='']
-		##If there are components to the source, see where the components start and end
-		comp_starts = [lines.index(line) for line in lines if 'COMPONENT' in line and 'END' not in line]
-		comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
-		
-		##For each component, go through and find ra,dec,freqs and fluxs
-		for start,end in zip(comp_starts,comp_ends):
-			freqs = []
-			fluxs = []
-			for line in lines[start:end]:
-				if 'COMPONENT' in line:
-					source.ras.append(float(line.split()[1]))
-					source.decs.append(float(line.split()[2]))
-				elif 'FREQ' in line:
-					freqs.append(float(line.split()[1]))
-					fluxs.append(float(line.split()[2]))
-			source.fluxs.append(fluxs)
-			source.freqs.append(freqs)
-			
-		##Check to see if a shapelet source - if so, append the line to a list in
-		##the rts source class
-		for line in lines:
-			if 'COEFF' in line: source.coeffs.append(line)
-			elif 'SHAPELET' in line: source.shapelet = line
-		
-		##For each set of source infomation, calculate and extrapolated flux at the centra flux value
-		for freqs,fluxs in zip(source.freqs,source.fluxs):
+	##For each set of source infomation, calculate and extrapolated flux at the centra flux value
+	for freqs,fluxs in zip(source.freqs,source.fluxs):
 
-			##If only one freq, extrap with an SI of -0.8:
-			if len(freqs)==1:
-				##f1 = c*v1**-0.8
-				##c = f1 / (v1**-0.8)
-				c = fluxs[0] / (freqs[0]**-0.8)
-				ext_flux = c*freqcent**-0.8
-			##If extrapolating below known freqs, choose two lowest frequencies
-			elif min(freqs)>freqcent:
-				ext_flux = extrap_flux([freqs[0],freqs[1]],[fluxs[0],fluxs[1]],freqcent)
-			##If extrapolating above known freqs, choose two highest frequencies
-			elif max(freqs)<freqcent:
-				ext_flux = extrap_flux([freqs[-2],freqs[-1]],[fluxs[-2],fluxs[-1]],freqcent)
-			##Otherwise, choose the two frequencies above and below, and extrap between them
-			else:
-				for i in xrange(len(freqs)-1):
-					if freqs[i]<freqcent and freqs[i+1]>freqcent:
-						ext_flux = extrap_flux([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],freqcent)
-			source.extrap_fluxs.append(ext_flux)
-			
-		beam_weights = []
+		##If only one freq, extrap with an SI of -0.8:
+		if len(freqs)==1:
+			##f1 = c*v1**-0.8
+			##c = f1 / (v1**-0.8)
+			c = fluxs[0] / (freqs[0]**-0.8)
+			ext_flux = c*freqcent**-0.8
+		##If extrapolating below known freqs, choose two lowest frequencies
+		elif min(freqs)>freqcent:
+			ext_flux = extrap_flux([freqs[0],freqs[1]],[fluxs[0],fluxs[1]],freqcent)
+		##If extrapolating above known freqs, choose two highest frequencies
+		elif max(freqs)<freqcent:
+			ext_flux = extrap_flux([freqs[-2],freqs[-1]],[fluxs[-2],fluxs[-1]],freqcent)
+		##Otherwise, choose the two frequencies above and below, and extrap between them
+		else:
+			for i in xrange(len(freqs)-1):
+				if freqs[i]<freqcent and freqs[i+1]>freqcent:
+					ext_flux = extrap_flux([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],freqcent)
+		source.extrap_fluxs.append(ext_flux)
 		
+	beam_weights = []
+	
+	##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
+	##Skip if so
+	ha_prim = LST - source.ras[0]*15.0
+	Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,source.decs[0],mwa_lat)
+	
+	if Alt_prim < 0.0:
+		pass
+	else:
+		##For each component, work out it's position, convolve with the beam and sum for the source
 		for ra,dec in zip(source.ras,source.decs):
 			##HA=LST-RA in def of ephem_utils.py
 			ha = LST - ra*15.0  ##RTS stores things in hours
@@ -244,8 +235,37 @@ for split_source in rts_srcs:
 		##of all components
 		source.weighted_flux = dot(array(beam_weights),array(source.extrap_fluxs))
 		sources.append(source)
+
+sources = []
+##Go through all sources in the source list, gather their information, extrapolate
+##the flux to the central frequency and weight by the beam at that position
+for split_source in rts_srcs:
+	
+	source = rts_source()
+	
+	##Find the primary source info - even if no comps, this will isolate
+	##primary source infomation
+	
+	primary_info = split_source.split('COMPONENT')[0].split('\n')
+	#print primary_info
+	primary_info = [info for info in primary_info if info!='']
+	#print primary_info[0]
+	meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
+	##IF LOOP HERE TO DO DISTANCE CUTOFF========================================
+	##==========================================================================
+	
+	offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
+	
+	if options.outside:
+		if offset > cutoff:
+			create_sources(source)
+		else:
+			pass
 	else:
-		pass
+		if offset <= cutoff:
+			create_sources(source)
+		else:
+			pass
 	
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
@@ -396,59 +416,5 @@ print "Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name
 ##Finito!!
 
 if options.plot:
-	from astropy.wcs import WCS
-	from wcsaxes import WCSAxes
-	from astropy import units as units
-
-
-	##A fits image header with which to create a wcs with
-	header = { 'NAXIS'  : 2,             ##Number of data axis
-	'NAXIS1' : 10,                  ##Length of X axis
-	'CTYPE1' : 'RA---SIN',           ##Projection type of X axis
-	'CRVAL1' : 0.0,        ##Central X world coord value
-	'CRPIX1' : 5,                    ##Central X Pixel value
-	'CUNIT1' : 'deg',                ##Unit of X axes
-	'CDELT1' : -1*cos(0.0*(pi/180.0)),              ##Size of pixel in world co-ord
-	'NAXIS2' : 10,                  ##Length of X axis
-	'CTYPE2' : 'DEC--SIN',           ##Projection along Y axis
-	'CRVAL2' : -27.0,                   ##Central Y world coord value
-	'CRPIX2' : 5,                    ##Central Y Pixel value
-	'CUNIT2' : 'deg',                ##Unit of Y world coord
-	'CDELT2' : +1      		     ##Size of pixel in deg
-	} 
-
-	fig = plt.figure(figsize=(15,15))
-	#ax = fig.add_subplot(111)
-
-	wcs = WCS(header=header)
-	ax = WCSAxes(fig, [0.1, 0.1, 0.8, 0.8], wcs=wcs)
-	fig.add_axes(ax)
-	tr_fk5 = ax.get_transform("fk5")
-	
-	if options.no_patch:
-		print len(weighted_sources)
-		ordered_sources = weighted_sources[int(options.num_sources)]
-
-	for source in ordered_sources:
-		#print source.ras[0],source.decs[0],source.weighted_flux
-		ra = source.ras[0]*15.0
-		#if ra>180.0: ra-=360.0
-		ax.scatter(ra,source.decs[0],marker='o',transform=tr_fk5)
-
-	delays_init = array(map(int,f[0].header['DELAYS'].split(',')))
-	title = "delays = %s\nnum_sources = %s" %(str(delays_init),options.num_sources)
-	ax.set_title(title)
-		
-	ra_ax = ax.coords[0]
-	dec_ax = ax.coords[1]
-	ra_ax.set_axislabel('RAJ2000')
-	dec_ax.set_axislabel('DECJ2000')
-	ra_ax.set_major_formatter('hh:mm:ss')#,font='Computer Modern Typewriter')
-	dec_ax.set_major_formatter('dd:mm:ss')
-
-	ra_ax.set_ticks(spacing=600 * units.arcmin)
-	dec_ax.set_ticks(spacing=600 * units.arcmin)
-
-	g = ax.coords.grid(linewidth=1.0,alpha=1.0)
-
-	plt.show()
+	cmd = "./plot_srclist.py -m %s -s %s" %(options.metafits, output_name)
+	subprocess.call(cmd,shell=True)

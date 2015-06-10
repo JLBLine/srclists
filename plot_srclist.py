@@ -287,10 +287,12 @@ if options.metafits!=0:
 	RA_up = LST - max_HA_mesh
 	RA_down = LST - min_HA_mesh
 	
+	mid_dec = (max_dec - min_dec) / 2.0
+	
 	if max_ra - min_ra < 200:
 		ax.set_xlim(wcs.wcs_world2pix(max_ra + 5,DEC,0)[0],wcs.wcs_world2pix(min_ra - 5,DEC,0)[0])
 	else:
-		pass
+		ax.set_xlim(wcs.wcs_world2pix(max_ra + 10,DEC,0)[0],wcs.wcs_world2pix(min_ra - 10,DEC,0)[0])
 		
 	if min_dec_mesh<-88:
 		ax.set_ylim(wcs.wcs_world2pix(RA,min_dec_mesh,0)[1],wcs.wcs_world2pix(RA,max_dec_mesh-7.0,0)[1])
