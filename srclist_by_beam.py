@@ -290,6 +290,7 @@ if options.no_patch:
 			out_file.write('\n'+source.shapelet)
 			for coeff in source.coeffs:
 				out_file.write('\n'+coeff)
+	out_file.write('\nENDSOURCE')
 	
 	for source in weighted_sources[1:int(options.num_sources)]:
 		out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
@@ -305,8 +306,6 @@ if options.no_patch:
 			out_file.write('\n'+source.shapelet)
 			for coeff in source.coeffs:
 				out_file.write('\n'+coeff)
-			
-			
 		out_file.write('\nENDSOURCE')
 	out_file.close()
 
@@ -395,7 +394,7 @@ else:
 			out_file.write('\n'+source.shapelet)
 			for coeff in source.coeffs:
 				out_file.write('\n'+coeff)
-			
+
 	##For all other sources, add all information as COMPONENTS
 	for source in ordered_sources[1:int(options.num_sources)]:
 		for i in xrange(len(source.ras)):
