@@ -10,13 +10,15 @@ import optparse
 
 parser = optparse.OptionParser()
 
-parser.add_option('-s',"--srclist", default=-1, help="srclist used to peel")
+parser.add_option('-s',"--srclist", default=-1, help="srclist used to calibrate or peel")
 
 parser.add_option('-p',"--parent_srclist", default=0, help="srclist used to create srclist for plotting")
 
 parser.add_option('-m',"--metafits", default=0, help="metafits to plot the beam with (optional)")
 
 parser.add_option('-c','--coords',default='0,-27.0', help ="Enter centre of field RA,Dec in deg,deg. Default=0,-27")
+
+parser.add_option('-w','--write',default=False, action='store_true',help ="Switch on to save figure instead of pop up plot")
 
 options, args = parser.parse_args()
 
@@ -50,7 +52,6 @@ header = { 'NAXIS'  : 2,             ##Number of data axis
 
 fig = plt.figure(figsize=(15,15))
 #ax = fig.add_subplot(111)
-
 wcs = WCS(header=header)
 ax = WCSAxes(fig, [0.1, 0.1, 0.8, 0.8], wcs=wcs)
 fig.add_axes(ax)
@@ -120,6 +121,8 @@ src_decs = [source.srcdec for source in rts_sources]
 if options.parent_srclist==0:
 	ax.plot(comp_ras,comp_decs,'o',color='#FFFF00',transform=tr_fk5,label="COMPONENT",markersize=10,markeredgecolor='k',markeredgewidth=2.0)
 	ax.plot(src_ras,src_decs,'*',color='c',transform=tr_fk5,label="BASE SOURCE",markersize=20,markeredgecolor='k',markeredgewidth=1.0)
+	#ax.plot(comp_ras,comp_decs,'o',color='#FFFF00',label="COMPONENT",markersize=10,markeredgecolor='k',markeredgewidth=2.0)
+	#ax.plot(src_ras,src_decs,'*',color='c',label="BASE SOURCE",markersize=20,markeredgecolor='k',markeredgewidth=1.0)
 
 else:
 	def split_sources(sources):
@@ -151,6 +154,8 @@ ax.set_title(options.srclist)
 
 
 if options.metafits!=0:
+	print 'check here'
+	
 	try:
 		import astropy.io.fits as pyfits
 	except ImportError:
@@ -249,7 +254,7 @@ if options.metafits!=0:
 	max_HA_mesh = LST - min_ra+10
 	min_HA_mesh = LST - max_ra-10
 	
-	print min_HA_mesh,max_HA_mesh,min_dec_mesh,max_dec_mesh
+	#print min_HA_mesh,max_HA_mesh,min_dec_mesh,max_dec_mesh
 	
 	#Set up a HA,Dec axes that covers more than the image
 	HA,Dec=meshgrid(arange(min_HA_mesh,max_HA_mesh+0.5,0.5),arange(min_dec_mesh,max_dec_mesh+0.5,0.5))
@@ -313,4 +318,5 @@ g = ax.coords.grid(linewidth=1.0,alpha=1.0)
 
 ax.legend(loc='best')
 
-plt.show()
+if options.write: fig.savefig("%s.png" %options.srclist.split('.txt')[0],bbox_edges='tight')
+else: plt.show()
