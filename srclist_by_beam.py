@@ -14,8 +14,6 @@ from optparse import OptionParser,OptionGroup
 import matplotlib.pyplot as plt
 import numpy as n
 import subprocess
-
-
 ##TO DO: 
 ## - Add precess options?
 
@@ -99,8 +97,11 @@ class rts_source():
 		self.extrap_fluxs = []
 		self.weighted_flux = -1
 		self.offset = -1
-		self.shapelet = None
-		self.coeffs = []
+		self.shapelets = []
+		self.shapelet_indexes = []
+		self.shapelet_coeffs = []
+		self.gaussians = []
+		self.gaussian_indexes = []
 		
 def extrap_flux(freqs,fluxs,extrap_freq):
 	'''f1/f2 = (nu1/n2)**alpha
@@ -157,10 +158,29 @@ def create_sources(source):
 	comp_starts = [lines.index(line) for line in lines if 'COMPONENT' in line and 'END' not in line]
 	comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
 	
+	##Check to see if the primary source is a gaussian or shapelet
+	for line in primary_info:
+		###Check here to see if primary source is a gaussian:
+		if 'GAUSSIAN' in line:
+			source.gaussians.append(line)
+			source.gaussian_indexes.append(0)
+		##As shapelet line comes after the 
+		elif 'SHAPELET' in line:
+			coeffs = []
+			source.shapelets.append(line)
+			source.shapelet_indexes.append(0)
+			##If the primary source is a shapelet, search for shapelet coeffs in primary data,
+			##gather in a list and append to the source class
+			for line in primary_info:
+				if 'COEFF' in line: coeffs.append(line)
+			source.shapelet_coeffs.append(coeffs)
+		
 	##For each component, go through and find ra,dec,freqs and fluxs
+	##Also check here if the component is a gaussian or shapelet
 	for start,end in zip(comp_starts,comp_ends):
 		freqs = []
 		fluxs = []
+		coeffs = []
 		for line in lines[start:end]:
 			if 'COMPONENT' in line:
 				source.ras.append(float(line.split()[1]))
@@ -168,15 +188,21 @@ def create_sources(source):
 			elif 'FREQ' in line:
 				freqs.append(float(line.split()[1]))
 				fluxs.append(float(line.split()[2]))
+			elif 'GAUSSIAN' in line:
+				source.gaussians.append(line)
+				gaus_ind = comp_starts.index(start) + 1
+				source.gaussian_indexes.append(gaus_ind)
+			elif 'SHAPELET' in line:
+				source.shapelets.append(line)
+				shap_ind = comp_starts.index(start) + 1
+				source.shapelet_indexes.append(shap_ind)
+			elif 'COEFF' in line:
+				coeffs.append(line)
 		source.fluxs.append(fluxs)
 		source.freqs.append(freqs)
-		
-	##Check to see if a shapelet source - if so, append the line to a list in
-	##the rts source class
-	for line in lines:
-		if 'COEFF' in line: source.coeffs.append(line)
-		elif 'SHAPELET' in line: source.shapelet = line
-	
+		if len(coeffs) > 0:
+			source.shapelet_coeffs.append(coeffs)
+			
 	##For each set of source infomation, calculate and extrapolated flux at the centra flux value
 	for freqs,fluxs in zip(source.freqs,source.fluxs):
 
@@ -263,6 +289,8 @@ for split_source in rts_srcs:
 			pass
 	else:
 		if offset <= cutoff:
+			#print 'here',primary_info
+			
 			create_sources(source)
 		else:
 			pass
@@ -277,35 +305,74 @@ if options.no_patch:
 	out_file = open(output_name,'w+')
 	for source in weighted_sources[:1]:
 		out_file.write('SOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
+		##If base source was a gaussian put it in:
+		if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
+			out_file.write('\n'+source.gaussians[0])
+		##write out the fluxes
 		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+		##Shapelet coeffs come after the frequencies
+		##If base source was a shapelet, put in and it's coefficients in
+		#print source.shapelets,source.shapelet_indexes,source.shapelet_coeffs
+		if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
+			print 'here',source.shapelets[0]
+			out_file.write('\n'+source.shapelets[0])
+			for coeff in source.shapelet_coeffs[0]:
+				out_file.write('\n'+coeff)
 		##Cycle through any components in that primary calibator
 		for i in range(1,len(source.ras)):
 			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			##Cycle through gaussian IDs and add the gaussian line if applicable
+			for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
+				if gaus_ind == i: out_file.write('\n'+gaus_line)
+			##add the fluxes
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			##Have a look and see if there is a shapelet in this source
+			##and write out if applicable
+			try:
+				shap_ind = source.shapelet_indexes.index(i)
+				out_file.write('\n'+source.shapelets[shap_ind])
+				for line in source.shapelet_coeffs[shap_ind]:
+					out_file.write('\n'+line)
+			except:
+				pass
 			out_file.write('\nENDCOMPONENT')
-		##Cycle through shapelet coeffs in primary calibator if present
-		if source.shapelet:
-			out_file.write('\n'+source.shapelet)
-			for coeff in source.coeffs:
-				out_file.write('\n'+coeff)
 	out_file.write('\nENDSOURCE')
 	
 	for source in weighted_sources[1:int(options.num_sources)]:
 		out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
+		##If base source was a gaussian put it in:
+		if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
+			out_file.write('\n'+source.gaussians[0])
+		##write out the fluxes
 		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+		##Shapelet coeffs come after the frequencies
+		##If base source was a shapelet, put in and it's coefficients in
+		if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
+			out_file.write('\n'+source.shapelets[0])	
+			for coeff in source.shapelet_coeffs[0]:
+				out_file.write('\n'+coeff)
 		##Cycle through any components in that primary calibator
 		for i in range(1,len(source.ras)):
 			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			##Cycle through gaussian IDs and add the gaussian line if applicable
+			for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
+				if gaus_ind == i: out_file.write('\n'+gaus_line)
+			##add the fluxes
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			##Have a look and see if there is a shapelet in this source
+			##and write out if applicable
+			try:
+				shap_ind = source.shapelet_indexes.index(i)
+				out_file.write('\n'+source.shapelets[shap_ind])
+				for line in source.shapelet_coeffs[shap_ind]:
+					out_file.write('\n'+line)
+			except:
+				pass
 			out_file.write('\nENDCOMPONENT')
-		if source.shapelet:
-			out_file.write('\n'+source.shapelet)
-			for coeff in source.coeffs:
-				out_file.write('\n'+coeff)
 		out_file.write('\nENDSOURCE')
 	out_file.close()
 
@@ -382,32 +449,58 @@ else:
 	##Print out the strongest source as the primary calibator
 	for source in ordered_sources[:1]:
 		out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
+		##If base source was a gaussian put it in:
+		if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
+			out_file.write('\n'+source.gaussians[0])
+		##write out the fluxes
 		for flux,freq in zip(source.fluxs[0],source.freqs[0]):
 			out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+		##Shapelet coeffs come after the frequencies
+		##If base source was a shapelet, put in and it's coefficients in
+		if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
+			out_file.write('\n'+source.shapelets[0])	
+			for coeff in source.shapelet_coeffs[0]:
+				out_file.write('\n'+coeff)
 		##Cycle through any components in that primary calibator
 		for i in range(1,len(source.ras)):
 			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			##Cycle through gaussian IDs and add the gaussian line if applicable
+			for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
+				if gaus_ind == i: out_file.write('\n'+gaus_line)
+			##add the fluxes
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+			##Have a look and see if there is a shapelet in this source
+			##and write out if applicable
+			try:
+				shap_ind = source.shapelet_indexes.index(i)
+				out_file.write('\n'+source.shapelets[shap_ind])
+				for line in source.shapelet_coeffs[shap_ind]:
+					out_file.write('\n'+line)
+			except:
+				pass
 			out_file.write('\nENDCOMPONENT')
-		if source.shapelet:
-			out_file.write('\n'+source.shapelet)
-			for coeff in source.coeffs:
-				out_file.write('\n'+coeff)
 
 	##For all other sources, add all information as COMPONENTS
 	for source in ordered_sources[1:int(options.num_sources)]:
 		for i in xrange(len(source.ras)):
 			out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+			##Cycle through gaussian IDs and add the gaussian line if applicable
+			for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
+				if gaus_ind == i: out_file.write('\n'+gaus_line)
+			#Add the fluxes
 			for flux,freq in zip(source.fluxs[i],source.freqs[i]):
 				out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
-			if source.shapelet:
-				out_file.write('\n'+source.shapelet)
-				for coeff in source.coeffs:
-					out_file.write('\n'+coeff)
+			##Have a look and see if there is a shapelet in this source
+			##and write out if applicable
+			try:
+				shap_ind = source.shapelet_indexes.index(i)
+				out_file.write('\n'+source.shapelets[shap_ind])
+				for line in source.shapelet_coeffs[shap_ind]:
+					out_file.write('\n'+line)
+			except:
+				pass
 			out_file.write('\nENDCOMPONENT')
-		
-			
 	out_file.write('\nENDSOURCE')
 	out_file.close()
 
