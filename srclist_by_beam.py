@@ -253,7 +253,9 @@ def create_sources(source):
 			##This is the power in XX,YY - this is taken from primary_beam.MWA_Tile_advanced - prints out
 			##lots of debugging messages so have pulled it out of the function
 			XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
-			overall_power = n.sqrt(XX[0]**2+YY[0]**2)   ###CHECK THIS - go for rms as this is how Stokes I is made
+			#overall_power = n.sqrt(XX[0]**2+YY[0]**2)   ###CHECK THIS - go for rms as this is how Stokes I is made
+			overall_power = (XX[0]+YY[0]) / 2.0
+			
 			beam_weights.append(overall_power[0])
 		
 		source.beam_weights = beam_weights
