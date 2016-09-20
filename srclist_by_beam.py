@@ -6,9 +6,10 @@ try:
 except ImportError:
     import pyfits
 from mwapy import ephem_utils
-from mwapy.pb import primary_beam
+from mwapy.pb import primary_beam,beam_full_EE
 from numpy import *
 from mwapy.pb import mwa_tile
+from mwapy import pb
 import sys
 from optparse import OptionParser,OptionGroup
 import matplotlib.pyplot as plt
@@ -102,6 +103,7 @@ class rts_source():
 		self.shapelet_coeffs = []
 		self.gaussians = []
 		self.gaussian_indexes = []
+		self.beam_inds = []
 		
 def extrap_flux(freqs,fluxs,extrap_freq):
 	'''f1/f2 = (nu1/n2)**alpha
@@ -126,20 +128,29 @@ mwa=ephem_utils.Obs[ephem_utils.obscode['MWA']]
 mwa_lat = mwa.lat
 
 ##Lookup an mwa_title (I don't really know precisely what it's doing)
-d = mwa_tile.Dipole(type='lookup')
-tile = mwa_tile.ApertureArray(dipoles=[d]*16)
+#d = mwa_tile.Dipole(type='lookup')
+#tile = mwa_tile.ApertureArray(dipoles=[d]*16)
 
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
+tile=beam_full_EE.ApertureArray(pb.h5file,freqcent)
+mybeam=beam_full_EE.Beam(tile, delays)
 
 ##Read in the srclist information
 rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
 del rts_srcs[-1]
 
-def create_sources(source):
-	##Put in to the source class
+def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, primary_info=None, beam_ind=None):
+	'''Takes the information for a source and puts it into an rts_source class for later use'''
+	
+	source = rts_source()
 	source.name = prim_name
 	source.ras.append(float(prim_ra))
 	source.decs.append(float(prim_dec))
+	all_ras.append(float(prim_ra))
+	all_decs.append(float(prim_dec))
+	source.beam_inds.append(beam_ind)
+	beam_ind += 1
+	
 	source.offset = offset
 	##Find the fluxes and append to the source class
 	prim_freqs = []
@@ -185,6 +196,11 @@ def create_sources(source):
 			if 'COMPONENT' in line:
 				source.ras.append(float(line.split()[1]))
 				source.decs.append(float(line.split()[2]))
+				all_ras.append(float(line.split()[1]))
+				all_decs.append(float(line.split()[2]))
+				source.beam_inds.append(beam_ind)
+				beam_ind += 1
+				
 			elif 'FREQ' in line:
 				freqs.append(float(line.split()[1]))
 				fluxs.append(float(line.split()[2]))
@@ -225,46 +241,51 @@ def create_sources(source):
 					ext_flux = extrap_flux([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],freqcent)
 		source.extrap_fluxs.append(ext_flux)
 		
-	beam_weights = []
-	
-	##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
-	##Skip if so
-	ha_prim = LST - source.ras[0]*15.0
-	Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,source.decs[0],mwa_lat)
-	
-	if Alt_prim < 0.0:
-		pass
-	else:
-		##For each component, work out it's position, convolve with the beam and sum for the source
-		for ra,dec in zip(source.ras,source.decs):
-			##HA=LST-RA in def of ephem_utils.py
-			ha = LST - ra*15.0  ##RTS stores things in hours
-			##Convert to zenith angle, azmuth in rad
-			
-			Az,Alt=ephem_utils.eq2horz(ha,dec,mwa_lat)
-			za=(90-Alt)*pi/180
-			az=Az*pi/180
-			
-			##Get the tile response for the given sky position,frequency and delay
-			##Needs za,az in 2D arrays ([[]] means (1,1)) for za,az
-			j = tile.getResponse(array([[az]]),array([[za]]),freqcent,delays=delays)
-			##Convert that in to XX,YY responses
-			vis = mwa_tile.makeUnpolInstrumentalResponse(j,j)
-			##This is the power in XX,YY - this is taken from primary_beam.MWA_Tile_advanced - prints out
-			##lots of debugging messages so have pulled it out of the function
-			XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
-			#overall_power = n.sqrt(XX[0]**2+YY[0]**2)   ###CHECK THIS - go for rms as this is how Stokes I is made
-			overall_power = (XX[0]+YY[0]) / 2.0
-			
-			beam_weights.append(overall_power[0])
+	sources.append(source)
 		
-		source.beam_weights = beam_weights
-		##Dot the weights and the extra fluxes together to come up with a weighted sum 
-		##of all components
-		source.weighted_flux = dot(array(beam_weights),array(source.extrap_fluxs))
-		sources.append(source)
+def get_beam_weights(ras=None,decs=None):
+	'''Takes ra and dec coords, and works out the overall beam power
+	at that location using the 2016 spherical harmonic beam code from mwapy'''
+	
+	##For each component, work out it's position, convolve with the beam and sum for the source
+	#for ra,dec in zip(source.ras,source.decs):
+	##HA=LST-RA in def of ephem_utils.py
+	has = LST - array(ras)*15.0  ##RTS stores things in hours
+	##Convert to zenith angle, azmuth in rad
+	
+	Az,Alt=ephem_utils.eq2horz(has,array(decs),mwa_lat)
+	za=(90-Alt)*pi/180
+	az=Az*pi/180
+	
+	##Get the tile response for the given sky position,frequency and delay
+	j = mybeam.get_interp_response(array([az]),array([za]), 5)
+	j = tile.apply_zenith_norm_Jones(j)
+	
+	if len(j.shape)==4:
+		j=n.swapaxes(n.swapaxes(j,0,2),1,3)
+	elif len(j.shape)==3: #1-D
+		j=n.swapaxes(n.swapaxes(j,1,2),0,1)
+	else: #single value
+		pass
+
+	print 'JSHAPE', j.shape
+	
+	##Convert that in to XX,YY responses
+	vis = mwa_tile.makeUnpolInstrumentalResponse(j,j)
+	##This is the power in XX,YY - this is taken from primary_beam.MWA_Tile_advanced - prints out
+	##lots of debugging messages so have pulled it out of the function
+	XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
+	
+	beam_weights = (XX[0]+YY[0]) / 2.0
+		
+	
+	return beam_weights
 
 sources = []
+all_ras = []
+all_decs = []
+beam_ind = 0
+
 ##Go through all sources in the source list, gather their information, extrapolate
 ##the flux to the central frequency and weight by the beam at that position
 for split_source in rts_srcs:
@@ -273,29 +294,41 @@ for split_source in rts_srcs:
 	
 	##Find the primary source info - even if no comps, this will isolate
 	##primary source infomation
-	
 	primary_info = split_source.split('COMPONENT')[0].split('\n')
-	#print primary_info
 	primary_info = [info for info in primary_info if info!='']
-	#print primary_info[0]
 	meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
-	##IF LOOP HERE TO DO DISTANCE CUTOFF========================================
-	##==========================================================================
 	
-	offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
+	##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
+	##Skip if so
+	ha_prim = LST - float(prim_ra)*15.0
+	Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,float(prim_dec),mwa_lat)
 	
-	if options.outside:
-		if offset > cutoff:
-			create_sources(source)
-		else:
-			pass
+	if Alt_prim < 0.0:
+		pass
 	else:
-		if offset <= cutoff:
-			#print 'here',primary_info
-			
-			create_sources(source)
+		offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
+		
+		if options.outside:
+			if offset > cutoff:
+				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info, beam_ind=beam_ind)
+			else:
+				pass
 		else:
-			pass
+			if offset <= cutoff:
+				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info, beam_ind=beam_ind)
+			else:
+				pass
+			
+##Need to work out all beam weightings in one single calculation,
+##as in each instance of the beam ~40s to run
+beam_weights = get_beam_weights(ras=all_ras,decs=all_decs)
+
+##Go through all the sources, and apply the beam weights to all
+##components in the source. Dot the weights and fluxes to get 
+##a total weighted flux
+for source in sources:
+	source_weights = beam_weights[source.beam_inds]
+	source.weighted_flux = dot(array(source_weights),array(source.extrap_fluxs))
 	
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
@@ -317,7 +350,7 @@ if options.no_patch:
 		##If base source was a shapelet, put in and it's coefficients in
 		#print source.shapelets,source.shapelet_indexes,source.shapelet_coeffs
 		if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
-			print 'here',source.shapelets[0]
+			#print 'here',source.shapelets[0]
 			out_file.write('\n'+source.shapelets[0])
 			for coeff in source.shapelet_coeffs[0]:
 				out_file.write('\n'+coeff)
@@ -398,6 +431,9 @@ else:
 		print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
 		
 	elif 'experimental' in options.order:
+		print 'here, here, here'
+		
+		
 		if len(options.order.split('='))==1:
 			flux_cut,dist_cut = 10.0,1.0
 		else:
