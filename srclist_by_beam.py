@@ -258,7 +258,10 @@ def get_beam_weights(ras=None,decs=None):
 	az=Az*pi/180
 	
 	##Get the tile response for the given sky position,frequency and delay
+	##Add this to interpolate over angular response of the beam
 	j = mybeam.get_interp_response(array([az]),array([za]), 5)
+#	j = mybeam.get_response(array([az]),array([za]))
+
 	j = tile.apply_zenith_norm_Jones(j)
 	
 	if len(j.shape)==4:
@@ -268,7 +271,7 @@ def get_beam_weights(ras=None,decs=None):
 	else: #single value
 		pass
 
-	print 'JSHAPE', j.shape
+#	print 'JSHAPE', j.shape
 	
 	##Convert that in to XX,YY responses
 	vis = mwa_tile.makeUnpolInstrumentalResponse(j,j)
