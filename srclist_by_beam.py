@@ -434,7 +434,7 @@ else:
 		print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
 		
 	elif 'experimental' in options.order:
-		print 'here, here, here'
+		#print 'here, here, here'
 		
 		
 		if len(options.order.split('='))==1:
