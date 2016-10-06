@@ -139,7 +139,7 @@ mybeam=beam_full_EE.Beam(tile, delays)
 rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
 del rts_srcs[-1]
 
-def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, primary_info=None, beam_ind=None):
+def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, primary_info=None,beam_ind=None):
 	'''Takes the information for a source and puts it into an rts_source class for later use'''
 	
 	source = rts_source()
@@ -259,8 +259,8 @@ def get_beam_weights(ras=None,decs=None):
 	
 	##Get the tile response for the given sky position,frequency and delay
 	##Add this to interpolate over angular response of the beam
-	j = mybeam.get_interp_response(array([az]),array([za]), 5)
-#	j = mybeam.get_response(array([az]),array([za]))
+	#j = mybeam.get_interp_response(array([az]),array([za]), 5)
+	j = mybeam.get_response(array([az]),array([za]))
 
 	j = tile.apply_zenith_norm_Jones(j)
 	
@@ -280,15 +280,16 @@ def get_beam_weights(ras=None,decs=None):
 	XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
 	
 	beam_weights = (XX[0]+YY[0]) / 2.0
-		
+	##OLd way of combining XX and YY - end up with beam values greater than 1, not good!
+	#beam_weights = n.sqrt(XX[0]**2+YY[0]**2) 
 	
 	return beam_weights
 
 sources = []
 all_ras = []
 all_decs = []
-beam_ind = 0
 
+beam_ind = 0
 ##Go through all sources in the source list, gather their information, extrapolate
 ##the flux to the central frequency and weight by the beam at that position
 for split_source in rts_srcs:
@@ -313,12 +314,14 @@ for split_source in rts_srcs:
 		
 		if options.outside:
 			if offset > cutoff:
-				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info, beam_ind=beam_ind)
+				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
+				beam_ind += 1
 			else:
 				pass
 		else:
 			if offset <= cutoff:
-				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info, beam_ind=beam_ind)
+				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
+				beam_ind += 1
 			else:
 				pass
 			
