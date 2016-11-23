@@ -8,8 +8,6 @@ except ImportError:
 from mwapy import ephem_utils
 from mwapy.pb import primary_beam,beam_full_EE
 from numpy import *
-from mwapy.pb import mwa_tile
-from mwapy import pb
 import sys
 from optparse import OptionParser,OptionGroup
 import matplotlib.pyplot as plt
@@ -127,13 +125,7 @@ def arcdist(RA1,RA2,Dec1,Dec2):
 mwa=ephem_utils.Obs[ephem_utils.obscode['MWA']]
 mwa_lat = mwa.lat
 
-##Lookup an mwa_title (I don't really know precisely what it's doing)
-#d = mwa_tile.Dipole(type='lookup')
-#tile = mwa_tile.ApertureArray(dipoles=[d]*16)
-
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
-tile=beam_full_EE.ApertureArray(pb.h5file,freqcent)
-mybeam=beam_full_EE.Beam(tile, delays)
 
 ##Read in the srclist information
 rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
@@ -241,7 +233,11 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
 					ext_flux = extrap_flux([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],freqcent)
 		source.extrap_fluxs.append(ext_flux)
 		
+	source_weights = []
+		
 	sources.append(source)
+	
+	return beam_ind
 		
 def get_beam_weights(ras=None,decs=None):
 	'''Takes ra and dec coords, and works out the overall beam power
@@ -257,27 +253,7 @@ def get_beam_weights(ras=None,decs=None):
 	za=(90-Alt)*pi/180
 	az=Az*pi/180
 	
-	##Get the tile response for the given sky position,frequency and delay
-	##Add this to interpolate over angular response of the beam
-	#j = mybeam.get_interp_response(array([az]),array([za]), 5)
-	j = mybeam.get_response(array([az]),array([za]))
-
-	j = tile.apply_zenith_norm_Jones(j)
-	
-	if len(j.shape)==4:
-		j=n.swapaxes(n.swapaxes(j,0,2),1,3)
-	elif len(j.shape)==3: #1-D
-		j=n.swapaxes(n.swapaxes(j,1,2),0,1)
-	else: #single value
-		pass
-
-#	print 'JSHAPE', j.shape
-	
-	##Convert that in to XX,YY responses
-	vis = mwa_tile.makeUnpolInstrumentalResponse(j,j)
-	##This is the power in XX,YY - this is taken from primary_beam.MWA_Tile_advanced - prints out
-	##lots of debugging messages so have pulled it out of the function
-	XX,YY = vis[:,:,0,0].real,vis[:,:,1,1].real
+	XX,YY = primary_beam.MWA_Tile_full_EE([za], [az], freq=freqcent, delays=delays, zenithnorm=True, power=True, interp=False)
 	
 	beam_weights = (XX[0]+YY[0]) / 2.0
 	##OLd way of combining XX and YY - end up with beam values greater than 1, not good!
@@ -311,17 +287,14 @@ for split_source in rts_srcs:
 		pass
 	else:
 		offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
-		
 		if options.outside:
 			if offset > cutoff:
-				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
-				beam_ind += 1
+				beam_ind = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
 			else:
 				pass
 		else:
 			if offset <= cutoff:
-				create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
-				beam_ind += 1
+				beam_ind = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
 			else:
 				pass
 			
@@ -336,9 +309,26 @@ for source in sources:
 	source_weights = beam_weights[source.beam_inds]
 	source.weighted_flux = dot(array(source_weights),array(source.extrap_fluxs))
 	
+all_names = [source.name for source in sources]
+#all_fluxes = [source.weighted_flux for source in sources]
+all_fluxes = [str(beam_weights[source.beam_inds]) for source in sources]
+
+
+out_file = open('weighted_names.txt','w+')
+
+for name, flux in zip(all_names, all_fluxes):
+	out_file.write('%s %s\n' %(name,flux))
+	
+out_file.close()
+	
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
 weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
+
+weighted_names = [source.name for source in weighted_sources]
+just_fluxes = [source.extrap_fluxs[0] for source in weighted_sources]
+
+
 
 if options.no_patch:
 	print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
