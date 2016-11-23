@@ -309,26 +309,9 @@ for source in sources:
 	source_weights = beam_weights[source.beam_inds]
 	source.weighted_flux = dot(array(source_weights),array(source.extrap_fluxs))
 	
-all_names = [source.name for source in sources]
-#all_fluxes = [source.weighted_flux for source in sources]
-all_fluxes = [str(beam_weights[source.beam_inds]) for source in sources]
-
-
-out_file = open('weighted_names.txt','w+')
-
-for name, flux in zip(all_names, all_fluxes):
-	out_file.write('%s %s\n' %(name,flux))
-	
-out_file.close()
-	
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
 weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
-
-weighted_names = [source.name for source in weighted_sources]
-just_fluxes = [source.extrap_fluxs[0] for source in weighted_sources]
-
-
 
 if options.no_patch:
 	print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
