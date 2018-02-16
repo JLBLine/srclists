@@ -276,6 +276,7 @@ for split_source in rts_srcs:
     ##primary source infomation
     primary_info = split_source.split('COMPONENT')[0].split('\n')
     primary_info = [info for info in primary_info if info!='']
+    
     meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
     
     ##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
@@ -332,7 +333,10 @@ weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sour
 
 if options.no_patch:
     print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
-    output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+    if options.outside:
+        output_name = "%s_%s_outside-cutoff_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+    else:
+        output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
     out_file = open(output_name,'w+')
     for source in weighted_sources[:1]:
         out_file.write('SOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
@@ -490,7 +494,10 @@ else:
                 ordered_sources.append(source)
         
     ##Make a new single patch source based on the user specified number of components
-    output_name = "%s_%s_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+    if options.outside:
+        output_name = "%s_%s_outside-cutoff_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+    else:
+        output_name = "%s_%s_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
     out_file = open(output_name,'w+')
 
     ##Print out the strongest source as the primary calibator
