@@ -152,8 +152,12 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
     prim_fluxs = []
     for line in primary_info:
         if 'FREQ' in line:
-            prim_freqs.append(float(line.split()[1]))
-            prim_fluxs.append(float(line.split()[2]))
+            ##Ignore if 0 flux
+            if float(line.split()[2]) <= 0.0:
+                pass
+            else:
+                prim_freqs.append(float(line.split()[1]))
+                prim_fluxs.append(float(line.split()[2]))
     source.freqs.append(prim_freqs)
     source.fluxs.append(prim_fluxs)
     
