@@ -213,6 +213,9 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
             
     ##For each set of source infomation, calculate and extrapolated flux at the centra flux value
     for freqs,fluxs in zip(source.freqs,source.fluxs):
+        
+        fluxs = array(fluxs)[where(array(fluxs) > 0.0)]
+        freqs = array(freqs)[where(array(fluxs) > 0.0)]
 
         ##If only one freq, extrap with an SI of -0.8:
         if len(freqs)==1:
