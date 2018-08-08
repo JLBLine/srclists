@@ -5,8 +5,8 @@ try:
     import astropy.io.fits as pyfits
 except ImportError:
     import pyfits
-from mwapy import ephem_utils
-from mwapy.pb import primary_beam,beam_full_EE
+
+from mwa_pb import primary_beam,beam_full_EE
 from numpy import *
 import sys
 from optparse import OptionParser,OptionGroup
@@ -15,6 +15,13 @@ import numpy as n
 import subprocess
 ##TO DO: 
 ## - Add precess options?
+
+import astropy
+from astropy.coordinates import Angle, SkyCoord, EarthLocation
+from astropy.time import Time
+
+MWAPOS = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8)
+
 
 parser = OptionParser()
 parser.add_option('-x','--no_patch', action='store_true',
@@ -123,9 +130,6 @@ def arcdist(RA1,RA2,Dec1,Dec2):
     alpha = n.arccos(cosalpha)
     return alpha/dr
 
-##Find the mwa latitde for converting ha,dec to Az,Alt
-mwa=ephem_utils.Obs[ephem_utils.obscode['MWA']]
-mwa_lat = mwa.lat
 
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
 
@@ -252,18 +256,33 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
 def get_beam_weights(ras=None,decs=None):
     '''Takes ra and dec coords, and works out the overall beam power
     at that location using the 2016 spherical harmonic beam code from mwapy'''
-    
+
+    mwatime = Time(obsID, format='gps', scale='utc')
+    coords = SkyCoord(ra=ras,
+                      dec=decs,
+                      equinox='J2000',
+                      unit=(astropy.units.hour, astropy.units.deg))
+    coords.location = MWAPOS
+    coords.obstime = mwatime
+    coords_prec = coords.transform_to('altaz')
+    za_rad = math.pi - coords_prec.alt.rad   # Need zenith angle in radians, not altitude in radians
+    az_rad = coords_prec.az.rad
+
+    # go from altitude to zenith angle
+    # theta = numpy.radians((90 - Alt))
+    # phi = numpy.radians(Az)
+
     ##For each component, work out it's position, convolve with the beam and sum for the source
     #for ra,dec in zip(source.ras,source.decs):
     ##HA=LST-RA in def of ephem_utils.py
-    has = LST - array(ras)*15.0  ##RTS stores things in hours
+    # has = LST - array(ras)*15.0  ##RTS stores things in hours
     ##Convert to zenith angle, azmuth in rad
     
-    Az,Alt=ephem_utils.eq2horz(has,array(decs),mwa_lat)
-    za=(90-Alt)*pi/180
-    az=Az*pi/180
+    # Az,Alt=ephem_utils.eq2horz(has,array(decs),mwa_lat)
+    # za=(90-Alt)*pi/180
+    # az=Az*pi/180
     
-    XX,YY = primary_beam.MWA_Tile_full_EE([za], [az], freq=freqcent, delays=delays, zenithnorm=True, power=True, interp=False)
+    XX,YY = primary_beam.MWA_Tile_full_EE([za_rad], [az_rad], freq=freqcent, delays=delays, zenithnorm=True, power=True, interp=False)
     
     beam_weights = (XX[0]+YY[0]) / 2.0
     ##OLd way of combining XX and YY - end up with beam values greater than 1, not good!
@@ -291,10 +310,20 @@ for split_source in rts_srcs:
     
     ##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
     ##Skip if so
-    ha_prim = LST - float(prim_ra)*15.0
-    Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,float(prim_dec),mwa_lat)
+
+    mwatime = Time(obsID, format='gps', scale='utc')
+    coords = SkyCoord(ra=prim_ra,
+                      dec=prim_dec,
+                      equinox='J2000',
+                      unit=(astropy.units.hour, astropy.units.deg))
+    coords.location = MWAPOS
+    coords.obstime = mwatime
+    coords_prec = coords.transform_to('altaz')
+
+    # ha_prim = LST - float(prim_ra)*15.0
+    # Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,float(prim_dec),mwa_lat)
     
-    if Alt_prim < 0.0:
+    if coords_prec.alt.deg < 0.0:
         pass
     else:
         offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
@@ -442,9 +471,17 @@ if options.no_patch:
             for i in range(0,len(source.ras)):
                 position_string_ra_hrs=str(source.ras[i]).split('.')[0]
                 position_string_ra_remainder='0.'+str(source.ras[i]).split('.')[1]
-                position_string_ra_remainder_sex=ephem_utils.dec2sexstring(float(position_string_ra_remainder),includesign=0,digits=1,roundseconds=1)
-                position_string_ra_dms='%sh%sm%ss' % (position_string_ra_hrs,position_string_ra_remainder_sex.split(':')[1],position_string_ra_remainder_sex.split(':')[2]) 
-                position_string_dec=ephem_utils.dec2sexstring(source.decs[i],includesign=0,digits=0,roundseconds=1)
+
+                # position_string_ra_remainder_sex=ephem_utils.dec2sexstring(float(position_string_ra_remainder),includesign=0,digits=1,roundseconds=1)
+                rs = Angle(float(position_string_ra_remainder), unit=astropy.units.hour)
+                position_string_ra_remainder_sex = rs.to_string(alwayssign=False, precision=1)
+
+                position_string_ra_dms='%sh%sm%ss' % (position_string_ra_hrs,position_string_ra_remainder_sex.split(':')[1],position_string_ra_remainder_sex.split(':')[2])
+
+                # position_string_dec=ephem_utils.dec2sexstring(source.decs[i],includesign=0,digits=0,roundseconds=1)
+                ds = Angle(source.decs[i], unit=astropy.units.deg)
+                position_string_dec = ds.to_string(alwayssign=False, precision=0)
+
                 position_string_dec_dms='%sd%sm%ss' % (position_string_dec.split(':')[0],position_string_dec.split(':')[1],position_string_dec.split(':')[2])             
                 position_string = '%s %s' % (position_string_ra_dms,position_string_dec_dms)         
                 out_file.write('  component {\n')
