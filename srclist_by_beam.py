@@ -5,16 +5,24 @@ try:
     import astropy.io.fits as pyfits
 except ImportError:
     import pyfits
-from mwapy import ephem_utils
-from mwapy.pb import primary_beam,beam_full_EE
+# from mwapy import ephem_utils
+
+try:
+    ##Andew's new mwa primary beam repo https://github.com/MWATelescope/mwa_pb.git
+    from mwa_pb import primary_beam,beam_full_EE
+except ImportError:
+    ##Old MWA_tools version
+    from mwapy.pb import primary_beam,beam_full_EE
+
 from numpy import *
 import sys
 from optparse import OptionParser,OptionGroup
 import matplotlib.pyplot as plt
-import numpy as n
 import subprocess
 ##TO DO:
 ## - Add precess options?
+
+from astropy.coordinates import Angle, SkyCoord, EarthLocation
 
 parser = OptionParser()
 parser.add_option('-x','--no_patch', action='store_true',
@@ -85,6 +93,159 @@ freqcent = f[0].header['FREQCENT']*1e+6
 ra_point = f[0].header['RA']
 dec_point = f[0].header['DEC']
 
+##From the old MWA_tools ephem_utils============================================
+##==============================================================================
+def putrange(x,r=24):
+    """ puts a value in the range [0,r)
+    """
+
+    if (not isinstance(x,ndarray)):
+        while (x<0):
+            x+=r
+        while (x>=r):
+            x-=r
+        return x
+    else:
+        # numpy version
+        while (any(x<0)):
+            x[x<0]+=r
+        while (any(x>=r)):
+            x[x>=r]-=r
+        return x
+
+def eq2horz(HA, Dec, lat):
+    """
+    [Az,Alt]=eq2horz(HA,Dec,lat)
+    equatorial to horizon coords
+    all decimal degrees
+    The sign convention for azimuth is north zero, east +pi/2.
+
+    from slalib sla_e2h
+    https://starlink.jach.hawaii.edu/viewvc/trunk/libraries/sla/e2h.f?revision=11739&view=markup
+    https://starlink.jach.hawaii.edu/viewvc/trunk/libraries/sla/
+
+    azimuth here is defined with N=0
+    """
+
+    if (isinstance(HA,ndarray)):
+        sh=sin(HA*pi/180)
+        ch=cos(HA*pi/180)
+        sd=sin(Dec*pi/180)
+        cd=cos(Dec*pi/180)
+        sl=sin(lat*pi/180)
+        cl=cos(lat*pi/180)
+
+        # (Az,El) as (x,y,z)
+        x=-ch*cd*sl+sd*cl
+        y=-sh*cd
+        z=ch*cd*cl+sd*sl
+
+        # to spherical
+        r=sqrt(x*x+y*y)
+        a=arctan2(y,x)
+        a[where(r==0)]=0
+        a[where(a<0)]+=pi*2
+        el=arctan2(z,r)
+    else:
+        sh=sin(HA*pi/180)
+        ch=cos(HA*pi/180)
+        sd=sin(Dec*pi/180)
+        cd=cos(Dec*pi/180)
+        sl=sin(lat*pi/180)
+        cl=cos(lat*pi/180)
+
+        # (Az,El) as (x,y,z)
+        x=-ch*cd*sl+sd*cl
+        y=-sh*cd
+        z=ch*cd*cl+sd*sl
+
+        # to spherical
+        r=sqrt(x*x+y*y)
+        if (r==0):
+            a=0
+        else:
+            a=arctan2(y,x)
+        a=putrange(a,2*pi)
+        el=arctan2(z,r)
+
+    return [a*180/pi, el*180/pi]
+
+def dec2sex(x):
+    """ convert decimal to sexadecimal
+    note that this fails for -1<x<0: d will be 0 when it should be -0
+    """
+
+    sign=1
+    if (x<0):
+        sign=-1
+    x=math.fabs(x)
+
+    d=int(x)
+    m=int(60*(x-d))
+    s=60*(60*(x-d)-m)
+    if (sign == -1):
+        d*=-1
+
+    return (d,m,s)
+
+def dec2sexstring(x, includesign=0,digits=2,roundseconds=0):
+    """
+    dec2sexstring(x, includesign=0,digits=2,roundseconds=0)
+    convert a decimal to a sexadecimal string
+    if includesign=1, then always use a sign
+    can specify number of digits on seconds (if digits>=0) or minutes (if < 0)
+    """
+
+    (d,m,s)=dec2sex(float(x))
+
+    if (not roundseconds):
+        sint=int(s)
+        if (digits>0):
+            sfrac=(10**digits)*(s-sint)
+            ss2='%02' + 'd' + '.%0' + ('%d' % digits) + 'd'
+            ss=ss2 % (sint,sfrac)
+        elif (digits == 0):
+            ss='%02d' % sint
+        else:
+            mfrac=10**(math.fabs(digits))*(s/60.0)
+            ss2='%02' + 'd' + '.%0' + ('%d' % math.fabs(digits)) + 'd'
+            ss=ss2 % (m,mfrac)
+    else:
+        sint=int(s)
+        if (digits == 0):
+            ss='%02d' % (round(s))
+        elif (digits > 0):
+            ss2='%02.' + ('%d' % digits) + 'f'
+            ss=ss2 % s
+            if (s < 10):
+                ss='0' + ss
+        else:
+            ss2='%02.' + ('%d' % math.fabs(digits)) + 'f'
+            ss=ss2 % (m+s/60.0)
+            if (m < 10):
+                ss='0' + ss
+
+
+    if (not includesign):
+        if (digits>=0):
+            sout="%02d:%02d:%s" % (d,m,ss)
+        else:
+            sout="%02d:%s" % (d,ss)
+        if (float(x)<0 and not sout.startswith("-")):
+            sout='-' + sout
+    else:
+        sign='+'
+        if (float(x)<0):
+            sign='-'
+        if (digits>=0):
+            sout="%s%02d:%02d:%s" % (sign,math.fabs(d),m,ss)
+        else:
+            sout="%s%02d:%s" % (sign,math.fabs(d),ss)
+
+    return sout
+
+##==============================================================================
+
 ##Class to store source information with - set to lists
 ##to store component info in the same place
 class rts_source():
@@ -115,17 +276,18 @@ def extrap_flux(freqs,fluxs,extrap_freq):
 
 def arcdist(RA1,RA2,Dec1,Dec2):
     '''calculates distance between two celestial points in degrees'''
-    dr = n.pi/180.0
+    dr = pi/180.0
     in1 = (90.0 - Dec1)*dr
     in2 = (90.0 - Dec2)*dr
     RA_d = (RA1 - RA2)*dr
-    cosalpha = n.cos(in1)*n.cos(in2) + n.sin(in1)*n.sin(in2)*n.cos(RA_d)
-    alpha = n.arccos(cosalpha)
+    cosalpha = cos(in1)*cos(in2) + sin(in1)*sin(in2)*cos(RA_d)
+    alpha = arccos(cosalpha)
     return alpha/dr
 
 ##Find the mwa latitde for converting ha,dec to Az,Alt
-mwa=ephem_utils.Obs[ephem_utils.obscode['MWA']]
-mwa_lat = mwa.lat
+
+MWAPOS = EarthLocation.from_geodetic(lon="116:40:14.93", lat="-26:42:11.95", height=377.8)
+mwa_lat = MWAPOS.lat.deg
 
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
 
@@ -259,7 +421,7 @@ def get_beam_weights(ras=None,decs=None):
     has = LST - array(ras)*15.0  ##RTS stores things in hours
     ##Convert to zenith angle, azmuth in rad
 
-    Az,Alt=ephem_utils.eq2horz(has,array(decs),mwa_lat)
+    Az,Alt=eq2horz(has,array(decs),mwa_lat)
     za=(90-Alt)*pi/180
     az=Az*pi/180
 
@@ -267,7 +429,7 @@ def get_beam_weights(ras=None,decs=None):
 
     beam_weights = (XX[0]+YY[0]) / 2.0
     ##OLd way of combining XX and YY - end up with beam values greater than 1, not good!
-    #beam_weights = n.sqrt(XX[0]**2+YY[0]**2)
+    #beam_weights = sqrt(XX[0]**2+YY[0]**2)
 
     return beam_weights
 
@@ -292,7 +454,7 @@ for split_source in rts_srcs:
     ##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
     ##Skip if so
     ha_prim = LST - float(prim_ra)*15.0
-    Az_prim,Alt_prim = ephem_utils.eq2horz(ha_prim,float(prim_dec),mwa_lat)
+    Az_prim,Alt_prim = eq2horz(ha_prim,float(prim_dec),mwa_lat)
 
     if Alt_prim < 0.0:
         pass
@@ -442,9 +604,9 @@ if options.no_patch:
             for i in range(0,len(source.ras)):
                 position_string_ra_hrs=str(source.ras[i]).split('.')[0]
                 position_string_ra_remainder='0.'+str(source.ras[i]).split('.')[1]
-                position_string_ra_remainder_sex=ephem_utils.dec2sexstring(float(position_string_ra_remainder),includesign=0,digits=1,roundseconds=1)
+                position_string_ra_remainder_sex=dec2sexstring(float(position_string_ra_remainder),includesign=0,digits=1,roundseconds=1)
                 position_string_ra_dms='%sh%sm%ss' % (position_string_ra_hrs,position_string_ra_remainder_sex.split(':')[1],position_string_ra_remainder_sex.split(':')[2])
-                position_string_dec=ephem_utils.dec2sexstring(source.decs[i],includesign=0,digits=0,roundseconds=1)
+                position_string_dec=dec2sexstring(source.decs[i],includesign=0,digits=0,roundseconds=1)
                 position_string_dec_dms='%sd%sm%ss' % (position_string_dec.split(':')[0],position_string_dec.split(':')[1],position_string_dec.split(':')[2])
                 position_string = '%s %s' % (position_string_ra_dms,position_string_dec_dms)
                 out_file.write('  component {\n')
