@@ -327,7 +327,8 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
     lines = split_source.split('\n')
     lines = [line for line in lines if line!='']
     ##If there are components to the source, see where the components start and end
-    comp_starts = [lines.index(line) for line in lines if 'COMPONENT' in line and 'END' not in line]
+    comp_starts = [i for i in xrange(len(lines)) if 'COMPONENT' in lines[i] and 'END' not in lines[i]]
+    # comp_starts = where(array(comp_starts) == 'COMPONENT')
     comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
 
     ##Check to see if the primary source is a gaussian or shapelet
