@@ -43,6 +43,9 @@ parser.add_option('-a', '--outside',action='store_true', default=False,
     help='Switch on to only consider sources OUTSIDE of the cutoff, rather than inside')
 parser.add_option('--aocalibrate',action='store_true', default=False,
     help='Output sourcelist in Andre Offringa format for use with CALIBRATE. Only works with the -x --no_patch option and does not work for shapelets (Gaussians OK)')
+parser.add_option('-z', '--zeroJy_source',action='store_true', default=False,
+    help='Add to include a zero Jy point source as the base source, located at the beam pointing centre')
+
 
 (options, args) = parser.parse_args()
 
@@ -681,12 +684,8 @@ else:
                 flux = src.weighted_flux
                 offset = src.offset
                 gauss_len = len(src.gaussians)
-                ##RTS does not like the top source being a gaussian
-                ##Skip the gaussians - (13/11/2017)
-                if dist_cut_lower<offset<dist_cut and gauss_len > 0:
-                    print 'Potential primary calibrator is a gaussian - skipping (convolved flux %.1f)' %flux
 
-                if flux>float(flux_cut) and dist_cut_lower<offset<dist_cut and gauss_len < 1:
+                if flux>float(flux_cut) and dist_cut_lower<offset<dist_cut:
                     close_fluxs.append(flux)
                     close_dists.append(offset)
             #print 'No primary calibrator between %.1fdeg and %.1fdeg of centre' %(dist_cut_lower,dist_cut)
@@ -721,6 +720,21 @@ else:
             if source.weighted_flux!=brightest_close_flux and source.offset!=brightest_close_offset:
                 ordered_sources.append(source)
 
+    ##If added a zero Jy point source to give a beam centre direction to the patch,
+    ##create the zero Jy source here and shove at the front of the ordered sources list
+    if options.zeroJy_source:
+
+        src = rts_source()
+        src.name = 'pointing'
+        src.ras.append(ra_point / 15.0)
+        src.decs.append(dec_point)
+        src.freqs.append([160e+6])
+        src.fluxs.append([0.0])
+
+        ordered_sources = [src] + ordered_sources
+
+        # print(ordered_sources)
+
     ##Make a new single patch source based on the user specified number of components
     if options.outside:
         output_name = "%s_%s_outside-cutoff_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
@@ -728,7 +742,7 @@ else:
         output_name = "%s_%s_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
     out_file = open(output_name,'w+')
 
-    ##Print out the strongest source as the primary calibator
+    ##Add the strongest source as the base source
     for source in ordered_sources[:1]:
         out_file.write('SOURCE %s %.10f %.10f' %(obsID,source.ras[0],source.decs[0]))
         ##If base source was a gaussian put it in:
@@ -764,7 +778,14 @@ else:
             out_file.write('\nENDCOMPONENT')
 
     ##For all other sources, add all information as COMPONENTS
-    for source in ordered_sources[1:int(options.num_sources)]:
+    ##If we added a zero Jy base source, need to include an extra source
+    if options.zeroJy_source:
+        all_sources = int(options.num_sources) + 1
+    else:
+        all_sources = int(options.num_sources)
+
+
+    for source in ordered_sources[1:all_sources]:
         for i in xrange(len(source.ras)):
             out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
             ##Cycle through gaussian IDs and add the gaussian line if applicable
