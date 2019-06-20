@@ -38,7 +38,7 @@ parser.add_option('-p', '--plot',action='store_true',
 parser.add_option('-c', '--cutoff', default=20.0,
     help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 parser.add_option('-o', '--order', default='experimental',
-    help='Criteria with which to order the output sources - "flux" for brightest first, "distance" for closest to pointing centre first, "experimental" for a combination, "name=*sourcename*" to force a calibrator. Default = "experimental". {To use default experimental, "experimental". Other, enter "experimental=flux,distance" with flux cutoff in Jy and distance cutoff in deg.} ')
+    help='Criteria with which to order the output sources - defaults to --order=experimental=10,1.0 Options are: "flux" for brightest first, "distance" for closest to pointing centre first, "name=*sourcename*" to force a calibrator, "experimental=flux,distance" to search for a source above a flux cutoff in Jy and within a distance cutoff in deg.} ')
 parser.add_option('-a', '--outside',action='store_true', default=False,
     help='Switch on to only consider sources OUTSIDE of the cutoff, rather than inside')
 parser.add_option('--aocalibrate',action='store_true', default=False,
@@ -490,6 +490,8 @@ for source in sources:
 all_weighted_fluxs = [source.weighted_flux for source in sources]
 weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
 
+# print([source.name for source in weighted_sources[:10]])
+
 ##Apparently the RTS dies if the top source is a gaussian so do a check
 ##Move the gaussian out of the top spot
 ##Actually can't do it here - brightest source is found later in "experimental"
@@ -553,6 +555,9 @@ if options.no_patch:
         out_file.write('\nENDSOURCE')
 
         for source in weighted_sources[1:int(options.num_sources)]:
+            # if source.name == 'PicA_low_ncoeff':
+            #     print('--------------------------------------------')
+            #     print('weighted, full', source.weighted_flux, source.fluxs)
             out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
             ##If base source was a gaussian put it in:
             if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
