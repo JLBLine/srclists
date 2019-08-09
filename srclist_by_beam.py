@@ -318,7 +318,7 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
     for line in primary_info:
         if 'FREQ' in line:
             ##Ignore if 0 flux
-            if float(line.split()[2]) <= 0.0:
+            if float(line.split()[2]) == 0.0:
                 pass
             else:
                 prim_freqs.append(float(line.split()[1]))
@@ -329,6 +329,7 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
     ##Split all info into lines and get rid of blank entries
     lines = split_source.split('\n')
     lines = [line for line in lines if line!='']
+
     ##If there are components to the source, see where the components start and end
     comp_starts = [i for i in xrange(len(lines)) if 'COMPONENT' in lines[i] and 'END' not in lines[i]]
     # comp_starts = where(array(comp_starts) == 'COMPONENT')
@@ -386,7 +387,6 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
 
     ##For each set of source infomation, calculate and extrapolated flux at the centra flux value
     for freqs,fluxs in zip(source.freqs,source.fluxs):
-
         fluxs = array(fluxs)[where(array(fluxs) != 0.0)]
         freqs = array(freqs)[where(array(fluxs) != 0.0)]
 
