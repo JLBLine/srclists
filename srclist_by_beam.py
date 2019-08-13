@@ -1,22 +1,21 @@
 #!/usr/bin/env python
 '''Script to create a single mega-patch calibrator based on the primary beam
 convolved with the source fluxes'''
+from __future__ import print_function
 try:
     import astropy.io.fits as pyfits
-except ImportError:
+except:
     import pyfits
-# from mwapy import ephem_utils
-
 try:
     ##Andew's new mwa primary beam repo https://github.com/MWATelescope/mwa_pb.git
-    from mwa_pb import primary_beam,beam_full_EE
-except ImportError:
-    ##Old MWA_tools version
-    from mwapy.pb import primary_beam,beam_full_EE
+    from mwa_pb import primary_beam
+except:
+#     ##Old MWA_tools version
+    from mwapy.pb import primary_beam
 
 from numpy import *
 import sys
-from optparse import OptionParser,OptionGroup
+import argparse
 import matplotlib.pyplot as plt
 import subprocess
 ##TO DO:
@@ -24,32 +23,33 @@ import subprocess
 
 from astropy.coordinates import Angle, SkyCoord, EarthLocation
 
-parser = OptionParser()
-parser.add_option('-x','--no_patch', action='store_true',
+parser = argparse.ArgumentParser(description='Make RTS style srclists to either calibrate in a patch or peel with separate sources.')
+parser.add_argument('-x','--no_patch', action='store_true',
     help="Switch on to not put the sources in to a patch")
-parser.add_option('-m','--metafits',
+parser.add_argument('-m','--metafits',
     help="metafits file to get obs info from")
-parser.add_option('-s','--srclist',
+parser.add_argument('-s','--srclist',
     help="Base srclist to get source info from")
-parser.add_option('-n','--num_sources',
+parser.add_argument('-n','--num_sources',
     help="Number of sources to put in the mega patch")
-parser.add_option('-p', '--plot',action='store_true',
+parser.add_argument('-p', '--plot',action='store_true',
     help='Plot the sources included - NEEDS THE MODULE wcsaxes')
-parser.add_option('-c', '--cutoff', default=20.0,
+parser.add_argument('-c', '--cutoff', default=20.0,
     help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
-parser.add_option('-o', '--order', default='experimental',
+parser.add_argument('-o', '--order', default='experimental',
     help='Criteria with which to order the output sources - defaults to --order=experimental=10,1.0 Options are: "flux" for brightest first, "distance" for closest to pointing centre first, "name=*sourcename*" to force a calibrator, "experimental=flux,distance" to search for a source above a flux cutoff in Jy and within a distance cutoff in deg.} ')
-parser.add_option('-a', '--outside',action='store_true', default=False,
+parser.add_argument('-a', '--outside',action='store_true', default=False,
     help='Switch on to only consider sources OUTSIDE of the cutoff, rather than inside')
-parser.add_option('--aocalibrate',action='store_true', default=False,
+parser.add_argument('--aocalibrate',action='store_true', default=False,
     help='Output sourcelist in Andre Offringa format for use with CALIBRATE. Only works with the -x --no_patch option and does not work for shapelets (Gaussians OK)')
-parser.add_option('-z', '--zeroJy_source',action='store_true', default=False,
+parser.add_argument('-z', '--zeroJy_source',action='store_true', default=False,
     help='Add to include a zero Jy point source as the base source, located at the beam pointing centre')
+parser.add_argument('-l', '--extra_cal_list', default=False,
+    help='Add a list of sources to add as separate calibrators alongside the patch. For example, if you want to calibrate 3 sources: a 1000 source patch; Fornax A (ben_ForA_lobe2_); Pictor A (PICA_point), add --extra_cal_list=ben_ForA_lobe2_,PICA_point. This will mean you get 1002 sources in your sky model.')
 
+args = parser.parse_args()
 
-(options, args) = parser.parse_args()
-
-cutoff = float(options.cutoff)
+cutoff = float(args.cutoff)
 
 def hour_to_deg(time):      #converts hh:mm:ss.ss in to degrees, must input as a string
     negtest=time[0]
@@ -65,27 +65,27 @@ def hour_to_deg(time):      #converts hh:mm:ss.ss in to degrees, must input as a
 
 ##Try opening the metafits file and complain if certain data is missing
 try:
-    f=pyfits.open(options.metafits)
-except Exception,e:
-    print 'Unable to open metafits file %s: %s' % (options.metafits,e)
+    f=pyfits.open(args.metafits)
+except:
+    print('Unable to open metafits file %s' % (args.metafits))
     sys.exit(1)
 if not 'DELAYS' in f[0].header.keys():
-    print 'Cannot find DELAYS in %s' % options.metafits
+    print('Cannot find DELAYS in %s' % args.metafits)
     sys.exit(1)
 if not 'LST' in f[0].header.keys():
-    print 'Cannot find LST in %s' % options.metafits
+    print('Cannot find LST in %s' % args.metafits)
     sys.exit(1)
 if not 'GPSTIME' in f[0].header.keys():
-    print 'Cannot find GPSTIME in %s' % options.metafits
+    print('Cannot find GPSTIME in %s' % args.metafits)
     sys.exit(1)
 if not 'FREQCENT' in f[0].header.keys():
-    print 'Cannot find FREQCENT in %s' % options.metafits
+    print('Cannot find FREQCENT in %s' % args.metafits)
     sys.exit(1)
 if not 'RA' in f[0].header.keys():
-    print 'Cannot find RA in %s' % options.metafits
+    print('Cannot find RA in %s' % args.metafits)
     sys.exit(1)
 if not 'DEC' in f[0].header.keys():
-    print 'Cannot find DEC in %s' % options.metafits
+    print('Cannot find DEC in %s' % args.metafits)
     sys.exit(1)
 
 ##Gather the useful info
@@ -295,11 +295,11 @@ mwa_lat = MWAPOS.lat.deg
 delays=repeat(reshape(delays,(1,16)),2,axis=0)
 
 ##Read in the srclist information
-rts_srcs = open(options.srclist,'r').read().split('ENDSOURCE')
+rts_srcs = open(args.srclist,'r').read().split('ENDSOURCE')
 del rts_srcs[-1]
 
 
-def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, primary_info=None,beam_ind=None):
+def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, primary_info=None,beam_ind=None,all_ras=False,all_decs=False):
     '''Takes the information for a source and puts it into an rts_source class for later use'''
 
     source = rts_source()
@@ -331,9 +331,9 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
     lines = [line for line in lines if line!='']
 
     ##If there are components to the source, see where the components start and end
-    comp_starts = [i for i in xrange(len(lines)) if 'COMPONENT' in lines[i] and 'END' not in lines[i]]
+    comp_starts = [i for i in arange(len(lines)) if 'COMPONENT' in lines[i] and 'END' not in lines[i]]
     # comp_starts = where(array(comp_starts) == 'COMPONENT')
-    comp_ends = [i for i in xrange(len(lines)) if lines[i]=='ENDCOMPONENT']
+    comp_ends = [i for i in arange(len(lines)) if lines[i]=='ENDCOMPONENT']
 
     ##Check to see if the primary source is a gaussian or shapelet
     for line in primary_info:
@@ -404,16 +404,14 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
             ext_flux = extrap_flux([freqs[-2],freqs[-1]],[fluxs[-2],fluxs[-1]],freqcent)
         ##Otherwise, choose the two frequencies above and below, and extrap between them
         else:
-            for i in xrange(len(freqs)-1):
+            for i in arange(len(freqs)-1):
                 if freqs[i]<freqcent and freqs[i+1]>freqcent:
                     ext_flux = extrap_flux([freqs[i],freqs[i+1]],[fluxs[i],fluxs[i+1]],freqcent)
         source.extrap_fluxs.append(ext_flux)
 
     source_weights = []
 
-    sources.append(source)
-
-    return beam_ind
+    return beam_ind, source, all_ras, all_decs
 
 def get_beam_weights(ras=None,decs=None):
     '''Takes ra and dec coords, and works out the overall beam power
@@ -437,6 +435,17 @@ def get_beam_weights(ras=None,decs=None):
 
     return beam_weights
 
+##Here the user wants a number of separate calibrators alongside
+##the patch - pull them out before ordering for the patch
+if args.extra_cal_list:
+    ##Get the names of the extra_cal_list
+    extra_cal_list = args.extra_cal_list.split(',')
+    extra_calibrators = []
+    extra_ras = []
+    extra_decs = []
+else:
+    extra_cal_list = []
+
 sources = []
 all_ras = []
 all_decs = []
@@ -445,35 +454,42 @@ beam_ind = 0
 ##Go through all sources in the source list, gather their information, extrapolate
 ##the flux to the central frequency and weight by the beam at that position
 for split_source in rts_srcs:
-
-    source = rts_source()
-
     ##Find the primary source info - even if no comps, this will isolate
     ##primary source infomation
     primary_info = split_source.split('COMPONENT')[0].split('\n')
     primary_info = [info for info in primary_info if info!='']
 
-    meh,prim_name,prim_ra,prim_dec = primary_info[0].split()
+    _,prim_name,prim_ra,prim_dec = primary_info[0].split()
 
     ##Check if the primary RA,Dec is below the horizon - it will crash the RTS otherwise
     ##Skip if so
     ha_prim = LST - float(prim_ra)*15.0
     Az_prim,Alt_prim = eq2horz(ha_prim,float(prim_dec),mwa_lat)
 
-    if Alt_prim < 0.0:
-        pass
+    if prim_name in extra_cal_list:
+        _,source,extra_ras,extra_decs = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info, beam_ind=0,
+                                       all_ras=extra_ras,all_decs=extra_decs)
+        extra_calibrators.append(source)
+
     else:
-        offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
-        if options.outside:
-            if offset > cutoff:
-                beam_ind = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
-            else:
-                pass
+        if Alt_prim < 0.0:
+            pass
         else:
-            if offset <= cutoff:
-                beam_ind = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset, primary_info=primary_info,beam_ind=beam_ind)
+            offset = arcdist(float(ra_point),float(prim_ra)*15.0,float(dec_point),float(prim_dec))
+            if args.outside:
+                if offset > cutoff:
+                    beam_ind,source, all_ras, all_decs = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset,
+                                                    primary_info=primary_info,beam_ind=beam_ind,all_ras=all_ras,all_decs=all_decs)
+                    sources.append(source)
+                else:
+                    pass
             else:
-                pass
+                if offset <= cutoff:
+                    beam_ind,source, all_ras, all_decs = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset,
+                                                    primary_info=primary_info,beam_ind=beam_ind,all_ras=all_ras,all_decs=all_decs)
+                    sources.append(source)
+                else:
+                    pass
 
 ##Need to work out all beam weightings in one single calculation,
 ##as in each instance of the beam ~40s to run
@@ -488,34 +504,15 @@ for source in sources:
 
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
-weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(options.num_sources)]
+weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(args.num_sources)]
 
-# print([source.name for source in weighted_sources[:10]])
-
-##Apparently the RTS dies if the top source is a gaussian so do a check
-##Move the gaussian out of the top spot
-##Actually can't do it here - brightest source is found later in "experimental"
-#if len(weighted_sources[0].gaussians):
-    #print 'Base source is a gaussian - RTS does not like this'
-    #move_ind = 1
-    #while len(weighted_sources[move_ind].gaussians) > 0:
-        #move_ind += 1
-    #print 'Moving source from position %d to the top' %(move_ind+1)
-    #new_weighted_sources = [weighted_sources[move_ind]]
-    #for index,source in enumerate(weighted_sources):
-        #if index == move_ind:
-            #pass
-        #else:
-            #new_weighted_sources.append(source)
-    #weighted_sources = new_weighted_sources
-
-if options.no_patch:
-    if not options.aocalibrate:
-        print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources"
-        if options.outside:
-            output_name = "%s_%s_outside-cutoff_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+if args.no_patch:
+    if not args.aocalibrate:
+        print("++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist - not mega-patching the sources")
+        if args.outside:
+            output_name = "%s_%s_outside-cutoff_peel%s.txt" %(args.srclist.split('/')[-1].split('.')[0],obsID,args.num_sources)
         else:
-            output_name = "%s_%s_peel%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+            output_name = "%s_%s_peel%s.txt" %(args.srclist.split('/')[-1].split('.')[0],obsID,args.num_sources)
         out_file = open(output_name,'w+')
         for source in weighted_sources[:1]:
             out_file.write('SOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
@@ -527,9 +524,7 @@ if options.no_patch:
                 out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
             ##Shapelet coeffs come after the frequencies
             ##If base source was a shapelet, put in and it's coefficients in
-            #print source.shapelets,source.shapelet_indexes,source.shapelet_coeffs
             if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
-                #print 'here',source.shapelets[0]
                 out_file.write('\n'+source.shapelets[0])
                 for coeff in source.shapelet_coeffs[0]:
                     out_file.write('\n'+coeff)
@@ -554,10 +549,7 @@ if options.no_patch:
                 out_file.write('\nENDCOMPONENT')
         out_file.write('\nENDSOURCE')
 
-        for source in weighted_sources[1:int(options.num_sources)]:
-            # if source.name == 'PicA_low_ncoeff':
-            #     print('--------------------------------------------')
-            #     print('weighted, full', source.weighted_flux, source.fluxs)
+        for source in weighted_sources[1:int(args.num_sources)]:
             out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
             ##If base source was a gaussian put it in:
             if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
@@ -594,18 +586,18 @@ if options.no_patch:
         out_file.close()
     #If you are doing aocalibrate
     else:
-        if options.outside:
-            print 'outside option not yet supported for aocalibrate - NO SOURCELIST WRITTEN'
+        if args.outside:
+            print('outside option not yet supported for aocalibrate - NO SOURCELIST WRITTEN')
             sys.exit()
         else:
-            output_name = "%s_%s_aocal%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
-        print "++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist for AO calibrate - not mega-patching the sources"
+            output_name = "%s_%s_aocal%s.txt" %(args.srclist.split('/')[-1].split('.')[0],obsID,args.num_sources)
+        print("++++++++++++++++++++++++++++++++++++++\nCreating weighted srclist for AO calibrate - not mega-patching the sources")
         out_file = open(output_name,'w+')
         out_file.write('skymodel fileformat 1.1\n')
         for source in weighted_sources:
             ##If it is a shapelet then send a warning that it is being skipped and continue to next source
             if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
-                print "WARNING: Source %s with weighted flux density %s Jy not included in model. Baselist contains a shapelet but --aocalibrate not compatible with shapelets." % (source.name,source.weighted_flux)
+                print("WARNING: Source %s with weighted flux density %s Jy not included in model. Baselist contains a shapelet but --aocalibrate not compatible with shapelets." % (source.name,source.weighted_flux))
                 continue
             out_file.write('source {\n')
             out_file.write('  name "%s"\n' % (source.name))
@@ -645,36 +637,32 @@ if options.no_patch:
         out_file.close()
 
 else:
-    if options.aocalibrate:
-        print 'Mega patching not supported for aocalibrate - NO SOURCELIST WRITTEN'
+    if args.aocalibrate:
+        print('Mega patching not supported for aocalibrate - NO SOURCELIST WRITTEN')
         sys.exit()
 
-    elif options.order=='flux':
+    elif args.order=='flux':
         ordered_sources = weighted_sources
 
-    elif options.order=='distance':
+    elif args.order=='distance':
         ordered_offsets = [source.offset for source in weighted_sources]
         ordered_sources = [source for offset,source in sorted(zip(ordered_offsets,weighted_sources),key=lambda pair: pair[0])]
 
-
-    elif 'name' in options.order:
-        name = options.order.split("=")[1]
+    elif 'name' in args.order:
+        name = args.order.split("=")[1]
         top_source_ind = [source.name for source in weighted_sources].index(name)
         top_source = weighted_sources[top_source_ind]
         ordered_sources = [top_source]
-        for i in xrange(len(weighted_sources)):
+        for i in arange(len(weighted_sources)):
             if i!=top_source_ind:
                 ordered_sources.append(weighted_sources[i])
-        print '++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset)
+        print('++++++++++++++++++++++++++++++++++++++\nBase Source forced as %s with \nconvolved flux %.1fJy at a distance %.2fdeg\n---------------------------------' %(top_source.name,top_source.weighted_flux,top_source.offset))
 
-    elif 'experimental' in options.order:
-        #print 'here, here, here'
-
-
-        if len(options.order.split('='))==1:
+    elif 'experimental' in args.order:
+        if len(args.order.split('='))==1:
             flux_cut,dist_cut = 10.0,1.0
         else:
-            flux_cut,dist_cut = options.order.split('=')[1].split(',')
+            flux_cut,dist_cut = args.order.split('=')[1].split(',')
 
         close_fluxs = []
         close_dists = []
@@ -684,7 +672,7 @@ else:
         ##Try to find all sources within distance cutoff above flux threshold - if none exist, extend search
         ##radii by 0.5 deg
         while len(close_fluxs)==0:
-            for index in xrange(len(weighted_sources)):
+            for index in arange(len(weighted_sources)):
                 src = weighted_sources[index]
                 flux = src.weighted_flux
                 offset = src.offset
@@ -693,11 +681,10 @@ else:
                 if flux>float(flux_cut) and dist_cut_lower<offset<dist_cut:
                     close_fluxs.append(flux)
                     close_dists.append(offset)
-            #print 'No primary calibrator between %.1fdeg and %.1fdeg of centre' %(dist_cut_lower,dist_cut)
             dist_cut+=0.5
             dist_cut_lower = dist_cut - 0.5
             if dist_cut_lower > cutoff:
-                print "++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy within initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut)
+                print("++++++++++++++++++++++++++++++++++++++\nNo source above %.2fJy within initial cutoff distance\nNO SOURCE LIST GENERATED\n++++++++++++++++++++++++++++++++++++++" %float(flux_cut))
                 sys.exit()
 
         ##This is the brightest source within the base source cutoff distance
@@ -716,7 +703,7 @@ else:
         weighted_names = [source.name for source in weighted_sources]
         brightest_close_name = weighted_names[brightest_ind]
 
-        print "++++++++++++++++++++++++++++++++++++++\nBase source %s convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_name,brightest_close_flux,brightest_close_offset)
+        print("++++++++++++++++++++++++++++++++++++++\nBase source %s convolved flux is %.3fJy at a distance \nof %.3fdeg from point centre\n---------------------------------" %(brightest_close_name,brightest_close_flux,brightest_close_offset))
 
         ##Put this source at the top of the ordered list, and then append all other sources after
         ##NOTE - this means that apart from the top source, all other sources are flux ordered.
@@ -727,7 +714,7 @@ else:
 
     ##If added a zero Jy point source to give a beam centre direction to the patch,
     ##create the zero Jy source here and shove at the front of the ordered sources list
-    if options.zeroJy_source:
+    if args.zeroJy_source:
 
         src = rts_source()
         src.name = 'pointing'
@@ -738,13 +725,11 @@ else:
 
         ordered_sources = [src] + ordered_sources
 
-        # print(ordered_sources)
-
     ##Make a new single patch source based on the user specified number of components
-    if options.outside:
-        output_name = "%s_%s_outside-cutoff_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+    if args.outside:
+        output_name = "%s_%s_outside-cutoff_patch%s.txt" %(args.srclist.split('/')[-1].split('.')[0],obsID,args.num_sources)
     else:
-        output_name = "%s_%s_patch%s.txt" %(options.srclist.split('/')[-1].split('.')[0],obsID,options.num_sources)
+        output_name = "%s_%s_patch%s.txt" %(args.srclist.split('/')[-1].split('.')[0],obsID,args.num_sources)
     out_file = open(output_name,'w+')
 
     ##Add the strongest source as the base source
@@ -784,14 +769,13 @@ else:
 
     ##For all other sources, add all information as COMPONENTS
     ##If we added a zero Jy base source, need to include an extra source
-    if options.zeroJy_source:
-        all_sources = int(options.num_sources) + 1
+    if args.zeroJy_source:
+        all_sources = int(args.num_sources) + 1
     else:
-        all_sources = int(options.num_sources)
-
+        all_sources = int(args.num_sources)
 
     for source in ordered_sources[1:all_sources]:
-        for i in xrange(len(source.ras)):
+        for i in arange(len(source.ras)):
             out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
             ##Cycle through gaussian IDs and add the gaussian line if applicable
             for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
@@ -810,11 +794,50 @@ else:
                 pass
             out_file.write('\nENDCOMPONENT')
     out_file.write('\nENDSOURCE')
+
+    ##Add the extra calibrators here if required
+    if args.extra_cal_list:
+        for source in extra_calibrators:
+            print('Adding extra calibrator %s' %source.name)
+            out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
+            ##If base source was a gaussian put it in:
+            if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
+                out_file.write('\n'+source.gaussians[0])
+            ##write out the fluxes
+            for flux,freq in zip(source.fluxs[0],source.freqs[0]):
+                out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+            ##Shapelet coeffs come after the frequencies
+            ##If base source was a shapelet, put in and it's coefficients in
+            if len(source.shapelets) > 0 and 0 in source.shapelet_indexes:
+                out_file.write('\n'+source.shapelets[0])
+                for coeff in source.shapelet_coeffs[0]:
+                    out_file.write('\n'+coeff)
+            ##Cycle through any components in that primary calibator
+            for i in range(1,len(source.ras)):
+                out_file.write('\nCOMPONENT %.10f %.10f' %(source.ras[i],source.decs[i]))
+                ##Cycle through gaussian IDs and add the gaussian line if applicable
+                for gaus_ind,gaus_line in zip(source.gaussian_indexes,source.gaussians):
+                    if gaus_ind == i: out_file.write('\n'+gaus_line)
+                ##add the fluxes
+                for flux,freq in zip(source.fluxs[i],source.freqs[i]):
+                    out_file.write("\nFREQ %.4e %.5f 0 0 0" %(freq,flux))
+                ##Have a look and see if there is a shapelet in this source
+                ##and write out if applicable
+                try:
+                    shap_ind = source.shapelet_indexes.index(i)
+                    out_file.write('\n'+source.shapelets[shap_ind])
+                    for line in source.shapelet_coeffs[shap_ind]:
+                        out_file.write('\n'+line)
+                except:
+                    pass
+                out_file.write('\nENDCOMPONENT')
+            out_file.write('\nENDSOURCE')
+        print('---------------------------------')
     out_file.close()
 
-print "Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name
+print("Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name)
 ##Finito!!
 
-if options.plot:
-    cmd = "./plot_srclist.py -m %s -s %s" %(options.metafits, output_name)
+if args.plot:
+    cmd = "./plot_srclist.py -m %s -s %s" %(args.metafits, output_name)
     subprocess.call(cmd,shell=True)
