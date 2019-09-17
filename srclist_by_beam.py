@@ -90,6 +90,13 @@ if not 'DEC' in f[0].header.keys():
 
 ##Gather the useful info
 delays=array(map(int,f[0].header['DELAYS'].split(',')))
+
+if len(where(delays == 32)[0]) == 16:
+    print('---------------------------------------------------------------------')
+    print('srclist_by_beam.py: All beam delays in metafits are equal to 32.\nmwa_pb will fall over and the world will end, cannot create srclist\nExiting now')
+    print('---------------------------------------------------------------------')
+    exit()
+
 LST = float(f[0].header['LST'])
 obsID = f[0].header['GPSTIME']
 freqcent = f[0].header['FREQCENT']*1e+6
