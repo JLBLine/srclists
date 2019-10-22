@@ -25,15 +25,29 @@ parser.add_argument('-n','--num_sources',
 parser.add_argument('-c', '--cutoff', default=20.0,
     help='Distance from the pointing centre within which to accept source (cutoff in deg). Default is 20deg')
 parser.add_argument('-o', '--order', default='experimental',
-    help='Criteria with which to order the output sources - defaults to --order=experimental=10,1.0 Options are: "flux" for brightest first, "distance" for closest to pointing centre first, "name=*sourcename*" to force a calibrator, "experimental=flux,distance" to search for a source above a flux cutoff in Jy and within a distance cutoff in deg.} ')
+    help='Criteria with which to order the output sources - defaults to --order=experimental=10,1.0 \
+    Options are: "flux" for brightest first, "distance" for closest to pointing centre first, \
+    "name=*sourcename*" to force a calibrator, "experimental=flux,distance" to search for a source \
+    above a flux cutoff in Jy and within a distance cutoff in deg.} ')
 parser.add_argument('-a', '--outside',action='store_true', default=False,
     help='Switch on to only consider sources OUTSIDE of the cutoff, rather than inside')
 parser.add_argument('--aocalibrate',action='store_true', default=False,
-    help='Output sourcelist in Andre Offringa format for use with CALIBRATE. Only works with the -x --no_patch option and does not work for shapelets (Gaussians OK)')
+    help='Output sourcelist in Andre Offringa format for use with CALIBRATE. Only works with the -x \
+    --no_patch option and does not work for shapelets (Gaussians OK)')
 parser.add_argument('-z', '--zeroJy_source',action='store_true', default=False,
     help='Add to include a zero Jy point source as the base source, located at the beam pointing centre')
-parser.add_argument('-l', '--extra_cal_list', default=False,
-    help='Add a list of sources to add as separate calibrators alongside the patch. For example, if you want to calibrate 3 sources: a 1000 source patch; Fornax A (ben_ForA_lobe2_); Pictor A (PICA_point), add --extra_cal_list=ben_ForA_lobe2_,PICA_point. This will mean you get 1002 sources in your sky model.')
+parser.add_argument('-l', '--dd_cal_list', default=False,
+    help='Add a specific list of sources to add as separate direction dependent calibrators, alongside the patch. \
+    For example, if you want to calibrate 3 sources: a 1000 source patch; Fornax A (ben_ForA_lobe2_); \
+    Pictor A (PICA_point), add --dd_cal_list=ben_ForA_lobe2_,PICA_point. \
+    Overall you will have 1002 calibrators in your sky model.')
+parser.add_argument('-b', '--num_extra_dd_cals', default=False,
+    help='Include a number of separate direction dependent calibrators, alongside the patch, \
+    from the n brightest calibrators after those included in the patch. For example, \
+    --num_extra_dd_cals=10 and --num_sources=1000 when creating a patch will put sources \
+    ranked 1-1000 in a patch, and add sources ranked 1001-1010 as separate dd calibrators. \
+    Note this is additive to --dd_cal_list, so if you have two sources in --dd_cal_list, \
+    --num_extra_dd_cals=10 and --num_sources=1000, you final sky model will have 1012 calibrators total')
 
 args = parser.parse_args()
 
@@ -85,14 +99,14 @@ del rts_srcs[-1]
 
 ##Here the user wants a number of separate calibrators alongside
 ##the patch - pull them out before ordering for the patch
-if args.extra_cal_list:
-    ##Get the names of the extra_cal_list
-    extra_cal_list = args.extra_cal_list.split(',')
+if args.dd_cal_list:
+    ##Get the names of the dd_cal_list
+    dd_cal_list = args.dd_cal_list.split(',')
     extra_calibrators = []
     extra_ras = []
     extra_decs = []
 else:
-    extra_cal_list = []
+    dd_cal_list = []
     extra_calibrators = False
 
 sources = []
@@ -115,7 +129,7 @@ for split_source in rts_srcs:
     ha_prim = LST - float(prim_ra)*15.0
     Az_prim,Alt_prim = eq2horz(ha_prim,float(prim_dec),mwa_lat)
 
-    if prim_name in extra_cal_list:
+    if prim_name in dd_cal_list:
         _,source,extra_ras,extra_decs = create_source(prim_name=prim_name, prim_ra=prim_ra, prim_dec=prim_dec, offset=offset,
                                         primary_info=primary_info, beam_ind=0,all_ras=extra_ras,all_decs=extra_decs,
                                         split_source=split_source,freqcent=freqcent)
@@ -158,7 +172,21 @@ for source in sources:
 
 ##Make a list of all of the weighted_fluxes and then order the sources according to those
 all_weighted_fluxs = [source.weighted_flux for source in sources]
-weighted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)][:int(args.num_sources)]
+all_sorted_sources = [source for flux,source in sorted(zip(all_weighted_fluxs,sources),key=lambda pair: pair[0],reverse=True)]
+
+weighted_sources = all_sorted_sources[:int(args.num_sources)]
+
+if args.num_extra_dd_cals:
+    try:
+        num_extra_dd_cals = int(args.num_extra_dd_cals)
+        if not extra_calibrators:
+            extra_calibrators = []
+
+        for source in all_sorted_sources[int(args.num_sources):int(args.num_sources)+num_extra_dd_cals]:
+            extra_calibrators.append(source)
+
+    except:
+        print('Failed to convert --num_extra_dd_cals=%s into an integer. Unable to add extra dd calibrators sensibly')
 
 if args.no_patch:
     if not args.aocalibrate:
@@ -277,7 +305,7 @@ else:
 
     write_rts_patch(ordered_sources=ordered_sources,num_sources=int(args.num_sources),
                     output_name=output_name,zeroJy_source=args.zeroJy_source,
-                    extra_cal_list=args.extra_cal_list,
+                    dd_cal_list=args.dd_cal_list,
                     extra_calibrators=extra_calibrators,obsID=obsID)
 
 print("Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name)
