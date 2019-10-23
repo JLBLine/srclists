@@ -184,9 +184,8 @@ if args.num_extra_dd_cals:
 
         for source in all_sorted_sources[int(args.num_sources):int(args.num_sources)+num_extra_dd_cals]:
             extra_calibrators.append(source)
-
-    except:
-        print('Failed to convert --num_extra_dd_cals=%s into an integer. Unable to add extra dd calibrators sensibly')
+    except ValueError:
+        print('WARNING Failed to convert --num_extra_dd_cals=%s into an integer. Unable to add extra dd calibrators sensibly' %args.num_extra_dd_cals)
 
 if args.no_patch:
     if not args.aocalibrate:
@@ -305,7 +304,6 @@ else:
 
     write_rts_patch(ordered_sources=ordered_sources,num_sources=int(args.num_sources),
                     output_name=output_name,zeroJy_source=args.zeroJy_source,
-                    dd_cal_list=args.dd_cal_list,
                     extra_calibrators=extra_calibrators,obsID=obsID)
 
 print("Created %s\n++++++++++++++++++++++++++++++++++++++" %output_name)

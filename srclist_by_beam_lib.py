@@ -426,8 +426,7 @@ def write_rts_peel(weighted_sources=None,num_sources=None,output_name=None):
     out_file.close()
 
 def write_rts_patch(ordered_sources=None,num_sources=None,output_name=None,
-                    zeroJy_source=None,dd_cal_list=None,
-                    extra_calibrators=None,obsID=None):
+                    zeroJy_source=None,extra_calibrators=None,obsID=None):
     '''Takes the apparent flux ordered sources and writes them to a patch
        Adds a zeroJy_source as the base source if required, and adds extra
        dd calibrators after the patch if required.'''
@@ -497,9 +496,10 @@ def write_rts_patch(ordered_sources=None,num_sources=None,output_name=None,
     out_file.write('\nENDSOURCE')
 
     ##Add the extra calibrators here if required
-    if dd_cal_list:
+    if extra_calibrators:
+        print('Adding %d extra dd calibrators' %(len(extra_calibrators)))
         for source in extra_calibrators:
-            print('Adding extra dd calibrator %s' %source.name)
+
             out_file.write('\nSOURCE %s %.10f %.10f' %(source.name,source.ras[0],source.decs[0]))
             ##If base source was a gaussian put it in:
             if len(source.gaussians) > 0 and 0 in source.gaussian_indexes:
