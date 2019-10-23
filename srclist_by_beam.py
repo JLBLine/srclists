@@ -72,7 +72,7 @@ if not 'DEC' in f[0].header.keys():
     sys.exit('Cannot find DEC in %s' % args.metafits)
 
 ##Gather the useful info
-delays=array(map(int,f[0].header['DELAYS'].split(',')))
+delays = array(f[0].header['DELAYS'].split(','), dtype=int)
 
 if len(where(delays == 32)[0]) == 16:
     print('---------------------------------------------------------------------')
