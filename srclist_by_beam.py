@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python 3
 '''Script to generate reduced RTS srclists, based on the expected brightest
 calibrators when convovled with MWA primary beam'''
 from __future__ import print_function

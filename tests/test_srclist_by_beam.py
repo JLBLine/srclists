@@ -19,10 +19,8 @@ def test_srclist_by_beam():
     for obs in obsids:
         for sn in source_numbers:
             for slist in source_lists:
-                print('srclist_by_beam.py', '-m', '{}.metafits'.format(obs), '-n',
-                      sn, '-s', slist)
                 # Run srclist
-                subprocess.call(['srclist_by_beam.py', '-m',
+                subprocess.call(['python3', 'srclist_by_beam.py', '-m',
                                  'tests/test_files/{}.metafits'.format(obs), '-n',
                                  str(sn), '-s', slist])
 
