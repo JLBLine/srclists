@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+#! /usr/bin/env python3
 """
 Tests srclist_by_beam.py script
 """
@@ -21,6 +22,7 @@ def test_srclist_by_beam():
             for slist in source_lists:
                 # Run srclist
                 subprocess.call(['srclist_by_beam.py', '-m',
+                subprocess.call(['python3', 'srclist_by_beam.py', '-m',
                                  'tests/test_files/{}.metafits'.format(obs), '-n',
                                  str(sn), '-s', slist])
 
