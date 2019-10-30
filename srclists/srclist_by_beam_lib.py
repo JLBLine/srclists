@@ -1,16 +1,20 @@
-#!/usr/bin/env python
 '''Library containing functions to generate reduced RTS srclists, based on the
 expected brightest calibrators when convovled with MWA primary beam'''
 from __future__ import print_function
+import sys
 try:
     ##Andew's new mwa primary beam repo https://github.com/MWATelescope/mwa_pb.git
     from mwa_pb import primary_beam
-except:
-#     ##Old MWA_tools version
-    from mwapy.pb import primary_beam
+except ImportError:
+    # Old MWA_tools primary beam code
+    try:
+        from mwapy.pb import primary_beam
+        print("WARNING: Using mwapy for MWA primary beam code.\nYou should use mwa_pb from https://github.com/MWATelescope/mwa_pb", file=sys.stderr)
+    except ImportError:
+        print("Could not import MWA primary beam code from mwa_pb or mwapy.\nYou may need to install mwa_pb from https://github.com/MWATelescope/mwa_pb", file=sys.stderr)
+        exit(1)
 
 from numpy import *
-import sys
 # from astropy.coordinates import EarthLocation
 
 def hour_to_deg(time):      #converts hh:mm:ss.ss in to degrees, must input as a string
