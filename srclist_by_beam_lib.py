@@ -312,10 +312,10 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
             c = fluxs[0] / (freqs[0]**-0.8)
             ext_flux = c*freqcent**-0.8
         ##If extrapolating below known freqs, choose two lowest frequencies
-        elif min(freqs)>freqcent:
+        elif min(freqs) >= freqcent:
             ext_flux = extrap_flux([freqs[0],freqs[1]],[fluxs[0],fluxs[1]],freqcent)
         ##If extrapolating above known freqs, choose two highest frequencies
-        elif max(freqs)<freqcent:
+        elif max(freqs) <= freqcent:
             ext_flux = extrap_flux([freqs[-2],freqs[-1]],[fluxs[-2],fluxs[-1]],freqcent)
         ##Otherwise, choose the two frequencies above and below, and extrap between them
         else:

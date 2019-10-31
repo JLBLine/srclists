@@ -48,6 +48,8 @@ parser.add_argument('-b', '--num_extra_dd_cals', default=False,
     ranked 1-1000 in a patch, and add sources ranked 1001-1010 as separate dd calibrators. \
     Note this is additive to --dd_cal_list, so if you have two sources in --dd_cal_list, \
     --num_extra_dd_cals=10 and --num_sources=1000, you final sky model will have 1012 calibrators total')
+parser.add_argument('-d','--frequency', default=False,
+    help="Extrapolate fluxes and beam to this frequency (in MHz, e.g. --frequency=150).  Default is to use the middle of observation band.")
 
 args = parser.parse_args()
 
@@ -82,9 +84,21 @@ if len(where(delays == 32)[0]) == 16:
 
 LST = float(f[0].header['LST'])
 obsID = f[0].header['GPSTIME']
-freqcent = f[0].header['FREQCENT']*1e+6
 ra_point = f[0].header['RA']
 dec_point = f[0].header['DEC']
+
+if args.frequency:
+    try:
+        freqcent = float(args.frequency)*1e6
+    except:
+        print('Cannot convert --frequency arg to a float, proceeding using band centre')
+        freqcent = f[0].header['FREQCENT']*1e+6
+
+else:
+    freqcent = f[0].header['FREQCENT']*1e+6
+
+print('Extrapolating fluxes and beam to %.3fMHz' %(freqcent / 1e+6))
+
 
 ##Find the mwa latitde for converting ha,dec to Az,Alt
 
