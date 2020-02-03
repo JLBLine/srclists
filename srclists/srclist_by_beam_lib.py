@@ -247,7 +247,7 @@ def create_source(prim_name=None, prim_ra=None, prim_dec=None, offset=None, prim
 
     ##Split all info into lines and get rid of blank entries
     lines = split_source.split('\n')
-    lines = [line for line in lines if line!='']
+    lines = [line for line in lines if line!='' and '#' not in line]
 
     ##If there are components to the source, see where the components start and end
     comp_starts = [i for i in arange(len(lines)) if 'COMPONENT' in lines[i] and 'END' not in lines[i]]

@@ -90,7 +90,7 @@ def main(args):
         ##Find the primary source info - even if no comps, this will isolate
         ##primary source infomation
         primary_info = split_source.split('COMPONENT')[0].split('\n')
-        primary_info = [info for info in primary_info if info!='']
+        primary_info = [info for info in primary_info if info!='' and '#' not in info]
 
         _,prim_name,prim_ra,prim_dec = primary_info[0].split()
 
