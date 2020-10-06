@@ -42,7 +42,15 @@ def main(args):
         sys.exit('Cannot find DEC in %s' % args.metafits)
 
     ##Gather the useful info
-    delays = array(f[0].header['DELAYS'].split(','), dtype=int)
+    if args.delays is False:
+        delays = array(f[0].header['DELAYS'].split(','), dtype=int)
+    else:
+        delays = array([int(x) for x in args.delays.split(',')])
+        if len(delays) != 16:
+            print('---------------------------------------------------------------------')
+            print('srclist_by_beam.py: When specifying delays, there must be 16\ncomma-separated values, e.g. 0,2,4,6,0,2,4,6,0,2,4,6,0,2,4,6\nExiting now')
+            print('---------------------------------------------------------------------')
+            sys.exit(1)
 
     if len(where(delays == 32)[0]) == 16:
         print('---------------------------------------------------------------------')
@@ -316,6 +324,11 @@ def _parse_args():
         ranked 1-1000 in a patch, and add sources ranked 1001-1010 as separate dd calibrators. \
         Note this is additive to --dd_cal_list, so if you have two sources in --dd_cal_list, \
         --num_extra_dd_cals=10 and --num_sources=1000, you final sky model will have 1012 calibrators total')
+    parser.add_argument('-d', '--delays', default=False, type=str,
+        help='Specify what the dipole delays are for a single tile. These delays will be used for all tiles. \
+        This flag is a power-user option to override what is specified in the metafits; useful if you want \
+        to make a srclist from an observation that has dipole delays of 32 everywhere. \
+        Specify like: 0,2,4,6,0,2,4,6,0,2,4,6,0,2,4,6')
 
     return parser.parse_args()
 
